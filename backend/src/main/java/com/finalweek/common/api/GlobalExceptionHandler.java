@@ -10,6 +10,12 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(BusinessException.class)
+    ResponseEntity<ApiError> business(BusinessException exception, HttpServletRequest request) {
+        return ResponseEntity.status(exception.status())
+                .body(ApiError.of(exception.code(), exception.getMessage(), requestId(request)));
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     ResponseEntity<ApiError> validation(MethodArgumentNotValidException exception, HttpServletRequest request) {
         var message = exception.getBindingResult().getFieldErrors().stream()
@@ -30,4 +36,3 @@ public class GlobalExceptionHandler {
         return value == null ? "unknown" : value.toString();
     }
 }
-

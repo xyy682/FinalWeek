@@ -5,9 +5,13 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties("finalweek")
 public record FinalWeekProperties(
+        Auth auth,
         Limits limits,
         Retrieval retrieval,
         Ai ai) {
+
+    public record Auth(Duration codeTtl, Duration sendCooldown, Duration rateWindow, int maxSendsPerWindow,
+                       int maxVerifyAttempts) {}
 
     public record Limits(
             int courseLimit,
@@ -31,4 +35,3 @@ public record FinalWeekProperties(
             String embeddingModel,
             String llmModel) {}
 }
-

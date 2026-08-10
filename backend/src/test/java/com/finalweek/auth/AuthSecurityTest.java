@@ -1,7 +1,6 @@
-package com.finalweek.common.system;
+package com.finalweek.auth;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -13,25 +12,29 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
 
-@WebMvcTest(SystemController.class)
+@WebMvcTest(AuthController.class)
 @Import({SecurityConfig.class, RequestIdFilter.class, SecurityErrorWriter.class})
-class SystemControllerTest {
+class AuthSecurityTest {
 
     @Autowired
     private MockMvc mockMvc;
 
     @MockitoBean
+    private VerificationCodeService codeService;
+
+    @MockitoBean
+    private UserAccountService userAccountService;
+
+    @MockitoBean
     private StringRedisTemplate redisTemplate;
 
     @Test
-    void pingIsPublicAndCarriesRequestId() throws Exception {
-        mockMvc.perform(get("/api/v1/system/ping"))
-                .andExpect(status().isOk())
-                .andExpect(header().exists(RequestIdFilter.REQUEST_ID_HEADER))
-                .andExpect(jsonPath("$.status").value("ok"))
-                .andExpect(jsonPath("$.service").value("finalweek-backend"));
+    void expiredOrMissingSessionCannotReadCurrentUser() throws Exception {
+        mockMvc.perform(get("/api/v1/me"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
     }
 }

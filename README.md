@@ -1,11 +1,12 @@
 # FinalWeek
 
-FinalWeek 是面向大学生期末复习的课程资料理解工具。项目按 [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) 串行开发；当前仓库已完成 Phase 1（项目脚手架与 Docker 基线），业务能力会在后续阶段逐项交付，不把尚未实现的功能描述成可用能力。
+FinalWeek 是面向大学生期末复习的课程资料理解工具。项目按 [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) 串行开发；当前仓库已完成 Phase 1–2（项目基线、登录、课程与权限隔离），其余业务能力会在后续阶段逐项交付，不把尚未实现的功能描述成可用能力。
 
 ## 当前可运行内容
 
-- Vue 3.5 + Vite 8 + TypeScript 6 + Element Plus 前端，包含规范要求的页面 URL 边界和后端状态联调。
-- Java 21 + Spring Boot 3.5 单体，包含十个业务模块包边界、统一错误结构、请求 ID、类型化配置、Flyway、Actuator 和 OpenAPI 基础。
+- Vue 3.5 + Vite 8 + TypeScript 6 + Element Plus 前端，包含邮箱登录、课程列表、课程四区独立 URL、设置页和手机基础布局。
+- Java 21 + Spring Boot 3.5 单体，已实现 Mailpit 邮箱验证码、Redis TTL/限流、Spring Session、CSRF、课程 CRUD/逻辑删除、8 门上限和 ownership 隔离。
+- Redis 故障门禁覆盖登录、全部认证接口和未来 AI API 路径，统一返回 `503 SERVICE_REDIS_UNAVAILABLE`；静态落地页及公开 ping 仍可访问。
 - 单个 Compose 项目启动前端、后端、MySQL、Redis、RabbitMQ、MinIO、Qdrant 和 Mailpit；Web API 与未来的 MQ consumer 保持同一后端进程。
 - JUnit、Testcontainers、Vitest 和 Playwright 测试基础。
 
@@ -41,6 +42,8 @@ docker compose ps
 - Mailpit：http://localhost:8025
 - Qdrant：http://localhost:6333/dashboard
 
+本地登录流程：打开应用后进入“邮箱验证码登录”，填写任意合法邮箱并发送验证码，再到 Mailpit 查看 6 位验证码。验证码默认 10 分钟有效，同一邮箱 60 秒内不可重复发送。
+
 如果宿主机已有 MySQL 或 Redis，在 `.env` 中修改 `MYSQL_HOST_PORT`、`REDIS_HOST_PORT` 即可；容器间连接仍使用标准内部端口。
 
 停止服务：
@@ -72,14 +75,14 @@ corepack pnpm@10.18.3 dev
 
 ```powershell
 Set-Location backend
-.\mvnw.cmd -B -ntp test
+.\mvnw.cmd -B -ntp -s .mvn\settings.xml test
 
 Set-Location ..\frontend
 corepack pnpm@10.18.3 test
 corepack pnpm@10.18.3 build
 ```
 
-Playwright 基础已配置；完整主流程会在 Phase 11 随业务闭环一起验收。目前没有 AI Golden Case 实测结果、性能数字或生产 SLA 声明。
+Phase 2 当前有 12 个后端测试用例和前端组件测试；完整 Playwright 主流程会在 Phase 11 随业务闭环一起验收。目前没有 AI Golden Case 实测结果、性能数字或生产 SLA 声明。
 
 ## 配置与密钥
 
@@ -88,4 +91,3 @@ Playwright 基础已配置；完整主流程会在 Phase 11 随业务闭环一�
 ## 规范
 
 产品范围、技术选型、交互流程、后端约束、前端规范和阶段计划均在 [`docs`](docs) 目录。实现发生冲突时，以六份规范文档的共同约束和 `IMPLEMENTATION_PLAN` 阶段顺序为准。
-
