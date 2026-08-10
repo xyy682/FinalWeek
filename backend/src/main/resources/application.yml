@@ -1,0 +1,93 @@
+spring:
+  application:
+    name: finalweek-backend
+  datasource:
+    url: ${MYSQL_URL:jdbc:mysql://localhost:3306/finalweek?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
+    username: ${MYSQL_USER:finalweek}
+    password: ${MYSQL_PASSWORD:finalweek_dev_password}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_DEFAULT_USER:finalweek}
+    password: ${RABBITMQ_DEFAULT_PASS:finalweek_dev_password}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+  session:
+    store-type: redis
+    redis:
+      namespace: fw:session
+
+server:
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        secure: ${APP_COOKIE_SECURE:false}
+        same-site: lax
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when_authorized
+
+logging:
+  structured:
+    format:
+      console: logstash
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+finalweek:
+  limits:
+    course-limit: ${COURSE_LIMIT:8}
+    upload-ttl: ${UPLOAD_TTL_HOURS:24}h
+    document-max-size-mb: ${DOCUMENT_MAX_SIZE_MB:100}
+    media-max-size-mb: ${MEDIA_MAX_SIZE_MB:2048}
+    media-max-duration: ${MEDIA_MAX_DURATION_MINUTES:120}m
+    parse-user-rate-per-minute: ${PARSE_USER_RATE_PER_MINUTE:5}
+    parse-global-rate-per-minute: ${PARSE_GLOBAL_RATE_PER_MINUTE:30}
+    plan-user-rate-per-minute: ${PLAN_USER_RATE_PER_MINUTE:5}
+    chat-user-rate-per-minute: ${CHAT_USER_RATE_PER_MINUTE:20}
+  retrieval:
+    vector-top-k: ${VECTOR_TOP_K:20}
+    bm25-top-k: ${BM25_TOP_K:20}
+    final-top-k: ${FINAL_TOP_K:8}
+    rrf-k: ${RRF_K:60}
+  ai:
+    plan-request-timeout: ${PLAN_REQUEST_TIMEOUT_SECONDS:60}s
+    chat-request-timeout: ${CHAT_REQUEST_TIMEOUT_SECONDS:60}s
+    chat-history-limit: ${CHAT_HISTORY_LIMIT:20}
+    asr-model: ${BAILIAN_ASR_MODEL:paraformer-realtime-v2}
+    ocr-model: ${BAILIAN_OCR_MODEL:qwen-vl-ocr-latest}
+    embedding-model: ${BAILIAN_EMBEDDING_MODEL:text-embedding-v4}
+    llm-model: ${BAILIAN_LLM_MODEL:qwen3.7-plus}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: docker
+  datasource:
+    url: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:finalweek}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+  data:
+    redis:
+      host: redis
+  rabbitmq:
+    host: rabbitmq
+
