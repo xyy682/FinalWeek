@@ -17,6 +17,8 @@ import com.finalweek.course.CourseService;
 import com.finalweek.material.Material;
 import com.finalweek.material.MaterialService;
 import com.finalweek.material.MaterialType;
+import com.finalweek.task.ParseTask;
+import com.finalweek.task.TaskDispatchService;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -40,6 +42,7 @@ class UploadServiceTest {
     private MaterialFinalizer finalizer;
     private UploadFilePolicy policy;
     private UploadService service;
+    private TaskDispatchService dispatcher;
     private RLock lock;
     private UUID userId;
     private UUID courseId;
@@ -50,12 +53,13 @@ class UploadServiceTest {
         states = mock(UploadStateStore.class); storage = mock(ObjectStorage.class);
         courses = mock(CourseService.class); materials = mock(MaterialService.class);
         finalizer = mock(MaterialFinalizer.class); policy = mock(UploadFilePolicy.class);
+        dispatcher = mock(TaskDispatchService.class);
         var redisson = mock(RedissonClient.class); lock = mock(RLock.class);
         when(redisson.getLock(anyString())).thenReturn(lock);
         when(lock.isHeldByCurrentThread()).thenReturn(true);
         service = new UploadService(states, storage,
                 new StorageProperties("http://localhost", "key", "secret", "bucket", DataSize.ofBytes(5), Duration.ofMinutes(15)),
-                properties(), policy, courses, materials, finalizer, redisson);
+                properties(), policy, courses, materials, finalizer, redisson, dispatcher);
         userId = UUID.randomUUID(); courseId = UUID.randomUUID(); uploadId = UUID.randomUUID();
     }
 
@@ -100,7 +104,9 @@ class UploadServiceTest {
         when(finalizer.duplicate(courseId, metadata.expectedSha256())).thenReturn(Optional.empty());
         var course = mock(Course.class); when(courses.get(userId, courseId)).thenReturn(course);
         var material = mock(Material.class); var materialId = UUID.randomUUID(); when(material.getId()).thenReturn(materialId);
-        when(finalizer.create(any(), any(), any(), any(), anyString(), anyString())).thenReturn(material);
+        var task = new ParseTask(userId, courseId, material);
+        when(finalizer.create(any(), any(), any(), any(), anyString(), anyString()))
+                .thenReturn(new MaterialFinalizer.FinalizedMaterial(material, task));
 
         var result = service.complete(userId, uploadId);
 
@@ -122,6 +128,8 @@ class UploadServiceTest {
         var existing = mock(Material.class); when(existing.getId()).thenReturn(UUID.randomUUID());
         when(finalizer.duplicate(courseId, metadata.expectedSha256())).thenReturn(Optional.of(existing));
         when(finalizer.recordDuplicate(uploadId, existing)).thenReturn(existing);
+        var existingTask = new ParseTask(userId, courseId, existing);
+        when(finalizer.taskFor(existing)).thenReturn(Optional.of(existingTask));
 
         var result = service.complete(userId, uploadId);
 

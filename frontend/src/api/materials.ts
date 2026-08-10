@@ -6,6 +6,7 @@ export type MaterialStatus = 'PENDING_PUBLISH' | 'PUBLISH_FAILED' | 'QUEUED' | '
 export interface Material {
   id: string
   courseId: string
+  taskId: string | null
   originalFilename: string
   sizeBytes: number
   mediaType: string
@@ -44,5 +45,5 @@ export const putChunk = (uploadId: string, chunkIndex: number, data: Blob) =>
     method: 'PUT', headers: { 'Content-Type': 'application/octet-stream' }, body: data,
   })
 export const completeUpload = (uploadId: string) =>
-  apiFetch<{ material: Material; duplicate: boolean }>(`/uploads/${uploadId}/complete`, { method: 'POST' })
+  apiFetch<{ material: Material; taskId: string; duplicate: boolean }>(`/uploads/${uploadId}/complete`, { method: 'POST' })
 export const deleteMaterial = (materialId: string) => apiFetch<void>(`/materials/${materialId}`, { method: 'DELETE' })

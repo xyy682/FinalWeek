@@ -1,6 +1,6 @@
 # FinalWeek
 
-FinalWeek 是面向大学生期末复习的课程资料理解工具。项目按 [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) 串行开发；当前仓库已完成 Phase 1–3（项目基线、登录与课程、分片上传与断点续传），其余业务能力会在后续阶段逐项交付，不把尚未实现的功能描述成可用能力。
+FinalWeek 是面向大学生期末复习的课程资料理解工具。项目按 [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) 串行开发；当前仓库已完成 Phase 1–4（项目基线、登录与课程、分片上传、RabbitMQ 任务引擎与 SSE），其余业务能力会在后续阶段逐项交付，不把尚未实现的功能描述成可用能力。
 
 ## 当前可运行内容
 
@@ -8,6 +8,7 @@ FinalWeek 是面向大学生期末复习的课程资料理解工具。项目按 
 - Java 21 + Spring Boot 3.5 单体，已实现 Mailpit 邮箱验证码、Redis TTL/限流、Spring Session、CSRF、课程 CRUD/逻辑删除、8 门上限和 ownership 隔离。
 - Redis 故障门禁覆盖登录、全部认证接口和未来 AI API 路径，统一返回 `503 SERVICE_REDIS_UNAVAILABLE`；静态落地页及公开 ping 仍可访问。
 - 分片上传使用 Redis 元数据/完成分片集合/完成标记、MinIO 确定性临时对象、Redisson complete 锁和 MySQL 唯一约束；支持断点差集续传、完整 SHA-256、格式/大小校验、同课程去重与过期临时分片清理。
+- 上传完成会在同一数据库事务创建资料与 `PENDING_PUBLISH` 解析任务；RabbitMQ 使用 durable 队列、publisher confirm、manual ack、每轮三次投递预算和 DLQ，Redis/SSE 推送进度，MySQL REST 状态负责断线恢复。当前解析流水线尚未进入 Phase 5，任务会以明确的 `PIPELINE_NOT_READY` 失败，而不会伪装为解析成功。
 - 单个 Compose 项目启动前端、后端、MySQL、Redis、RabbitMQ、MinIO、Qdrant 和 Mailpit；Web API 与未来的 MQ consumer 保持同一后端进程。
 - JUnit、Testcontainers、Vitest 和 Playwright 测试基础。
 
@@ -83,7 +84,7 @@ corepack pnpm@10.18.3 test
 corepack pnpm@10.18.3 build
 ```
 
-自动化测试覆盖登录、权限、Redis 门禁、分片写入顺序、缺片、顺序合并、哈希、重复资料、过期清理和前端 30%/70%/99% 差集计算；完整 Playwright 主流程会在 Phase 11 随业务闭环一起验收。目前没有 AI Golden Case 实测结果、性能数字或生产 SLA 声明。
+自动化测试覆盖登录、权限、Redis 门禁、分片写入顺序、缺片、顺序合并、哈希、重复资料、过期清理、任务投递失败补偿、旧执行轮次去重和前端 30%/70%/99% 差集计算；完整 Playwright 主流程会在 Phase 11 随业务闭环一起验收。目前没有 AI Golden Case 实测结果、性能数字或生产 SLA 声明。
 
 ## 配置与密钥
 

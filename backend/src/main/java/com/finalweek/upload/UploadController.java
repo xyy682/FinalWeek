@@ -57,7 +57,8 @@ public class UploadController {
     @PostMapping("/uploads/{uploadId}/complete")
     CompleteResponse complete(@AuthenticationPrincipal FinalWeekPrincipal principal, @PathVariable UUID uploadId) {
         var result = service.complete(principal.userId(), uploadId);
-        return new CompleteResponse(MaterialResponse.from(result.material()), result.duplicate());
+        return new CompleteResponse(MaterialResponse.from(result.material(), result.task().getId()),
+                result.task().getId(), result.duplicate());
     }
 
     record InitRequest(@NotBlank @Size(max = 255) String filename, @Positive long fileSize,
@@ -65,5 +66,5 @@ public class UploadController {
                        @NotNull MaterialType materialType, @Size(max = 1000) String focusNotes) {}
     record InitResponse(UUID uploadId, long chunkSize, int totalChunks, Instant expiresAt) {}
     record StatusResponse(UUID uploadId, String status, List<Integer> uploadedChunks, UUID materialId, Instant expiresAt) {}
-    record CompleteResponse(MaterialResponse material, boolean duplicate) {}
+    record CompleteResponse(MaterialResponse material, UUID taskId, boolean duplicate) {}
 }

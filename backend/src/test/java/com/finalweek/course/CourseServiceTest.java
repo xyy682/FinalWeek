@@ -10,6 +10,8 @@ import com.finalweek.auth.UserAccount;
 import com.finalweek.auth.UserAccountRepository;
 import com.finalweek.common.api.BusinessException;
 import com.finalweek.common.config.FinalWeekProperties;
+import com.finalweek.task.ParseTaskRepository;
+import com.finalweek.material.MaterialRepository;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.UUID;
@@ -32,7 +34,8 @@ class CourseServiceTest {
                 new FinalWeekProperties.Retrieval(20, 20, 8, 60),
                 new FinalWeekProperties.Ai(Duration.ofSeconds(60), Duration.ofSeconds(60), 20,
                         "asr", "ocr", "embedding", "llm"));
-        service = new CourseService(courseRepository, userRepository, properties);
+        service = new CourseService(courseRepository, userRepository, properties,
+                mock(ParseTaskRepository.class), mock(MaterialRepository.class));
     }
 
     @Test
@@ -60,4 +63,3 @@ class CourseServiceTest {
         verify(courseRepository).save(course);
     }
 }
-

@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import com.finalweek.task.ParseTaskRepository;
 
 @Service
 public class MaterialService {
@@ -19,11 +20,14 @@ public class MaterialService {
     private final MaterialRepository repository;
     private final CourseService courseService;
     private final ObjectStorage storage;
+    private final ParseTaskRepository tasks;
 
-    public MaterialService(MaterialRepository repository, CourseService courseService, ObjectStorage storage) {
+    public MaterialService(MaterialRepository repository, CourseService courseService, ObjectStorage storage,
+                           ParseTaskRepository tasks) {
         this.repository = repository;
         this.courseService = courseService;
         this.storage = storage;
+        this.tasks = tasks;
     }
 
     @Transactional(readOnly = true)
@@ -43,10 +47,16 @@ public class MaterialService {
         switch (material.getStatus()) {
             case SUCCEEDED -> throw new BusinessException(HttpStatus.CONFLICT, "MATERIAL_DELETE_FORBIDDEN",
                     "解析成功的资料只能随整门课程删除");
-            case PROCESSING, RETRYING, QUEUED -> throw new BusinessException(HttpStatus.CONFLICT,
+            case PROCESSING, RETRYING -> throw new BusinessException(HttpStatus.CONFLICT,
                     "TASK_NOT_CANCELLABLE", "当前任务状态暂不允许删除资料");
             default -> {
+                var task = tasks.findByMaterial_Id(materialId).orElseThrow(() ->
+                        new IllegalStateException("资料缺少解析任务: " + materialId));
+                if (!task.getStatus().terminal() && tasks.cancelUnstarted(task.getId()) != 1) {
+                    throw new BusinessException(HttpStatus.CONFLICT, "TASK_NOT_CANCELLABLE", "任务已开始，无法删除资料");
+                }
                 material.markDeleted();
+                repository.save(material);
                 var objectKey = material.getObjectKey();
                 TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                     @Override public void afterCommit() {

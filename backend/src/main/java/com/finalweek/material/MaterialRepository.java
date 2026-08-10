@@ -7,6 +7,7 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.repository.query.Param;
 
 public interface MaterialRepository extends JpaRepository<Material, UUID> {
@@ -15,6 +16,11 @@ public interface MaterialRepository extends JpaRepository<Material, UUID> {
     Optional<Material> findByCourse_IdAndContentHashAndDeletedFalse(UUID courseId, String contentHash);
     long countByCourse_IdAndDeletedFalse(UUID courseId);
     Optional<Material> findTopByCourse_IdAndDeletedFalseOrderByUpdatedAtDesc(UUID courseId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update Material material set material.status = :status, material.updatedAt = CURRENT_TIMESTAMP " +
+            "where material.id = :id")
+    int updateStatus(@Param("id") UUID id, @Param("status") MaterialStatus status);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select material from Material material where material.id = :id and material.course.user.id = :userId and material.deleted = false")

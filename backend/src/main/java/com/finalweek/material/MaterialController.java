@@ -12,22 +12,26 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import com.finalweek.task.ParseTaskRepository;
 
 @RestController
 @RequestMapping("/api/v1")
 public class MaterialController {
     private final MaterialService service;
+    private final ParseTaskRepository tasks;
 
-    public MaterialController(MaterialService service) { this.service = service; }
+    public MaterialController(MaterialService service, ParseTaskRepository tasks) { this.service = service; this.tasks = tasks; }
 
     @GetMapping("/courses/{courseId}/materials")
     List<MaterialResponse> list(@AuthenticationPrincipal FinalWeekPrincipal principal, @PathVariable UUID courseId) {
-        return service.list(principal.userId(), courseId).stream().map(MaterialResponse::from).toList();
+        return service.list(principal.userId(), courseId).stream().map(material -> MaterialResponse.from(material,
+                tasks.findByMaterial_Id(material.getId()).map(task -> task.getId()).orElse(null))).toList();
     }
 
     @GetMapping("/materials/{materialId}")
     MaterialResponse get(@AuthenticationPrincipal FinalWeekPrincipal principal, @PathVariable UUID materialId) {
-        return MaterialResponse.from(service.get(principal.userId(), materialId));
+        var material = service.get(principal.userId(), materialId);
+        return MaterialResponse.from(material, tasks.findByMaterial_Id(materialId).map(task -> task.getId()).orElse(null));
     }
 
     @DeleteMapping("/materials/{materialId}")
@@ -36,14 +40,15 @@ public class MaterialController {
         service.delete(principal.userId(), materialId);
     }
 
-    public record MaterialResponse(UUID id, UUID courseId, String originalFilename, long sizeBytes,
+    public record MaterialResponse(UUID id, UUID courseId, UUID taskId, String originalFilename, long sizeBytes,
                                    String mediaType, MaterialType materialType, String focusNotes,
                                    MaterialStatus status, String contentHash, Instant createdAt, Instant updatedAt) {
-        public static MaterialResponse from(Material material) {
-            return new MaterialResponse(material.getId(), material.getCourseId(), material.getOriginalFilename(),
+        public static MaterialResponse from(Material material, UUID taskId) {
+            return new MaterialResponse(material.getId(), material.getCourseId(), taskId, material.getOriginalFilename(),
                     material.getSizeBytes(), material.getMediaType(), material.getMaterialType(),
                     material.getFocusNotes(), material.getStatus(), material.getContentHash(),
                     material.getCreatedAt(), material.getUpdatedAt());
         }
+        public static MaterialResponse from(Material material) { return from(material, null); }
     }
 }

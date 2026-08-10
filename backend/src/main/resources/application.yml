@@ -22,6 +22,10 @@ spring:
     password: ${RABBITMQ_DEFAULT_PASS:finalweek_dev_password}
     publisher-confirm-type: correlated
     publisher-returns: true
+    listener:
+      simple:
+        acknowledge-mode: manual
+        prefetch: 1
   mail:
     host: ${MAIL_HOST:localhost}
     port: ${MAIL_PORT:1025}
@@ -60,6 +64,17 @@ springdoc:
     path: /swagger-ui.html
 
 finalweek:
+  task:
+    exchange: ${TASK_EXCHANGE:finalweek.tasks}
+    routing-key: ${TASK_ROUTING_KEY:parse}
+    queue: ${TASK_QUEUE:finalweek.parse}
+    dead-letter-exchange: ${TASK_DLX:finalweek.tasks.dlx}
+    dead-letter-queue: ${TASK_DLQ:finalweek.parse.dlq}
+    confirm-timeout: ${TASK_CONFIRM_TIMEOUT_SECONDS:5}s
+    stale-pending-threshold: ${TASK_STALE_PENDING_SECONDS:30}s
+    stale-scan-interval: ${TASK_STALE_SCAN_SECONDS:30}s
+    progress-ttl: ${TASK_PROGRESS_TTL_HOURS:24}h
+    max-delivery-attempts: ${TASK_MAX_DELIVERY_ATTEMPTS:3}
   storage:
     endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
     access-key: ${MINIO_ROOT_USER:finalweek}

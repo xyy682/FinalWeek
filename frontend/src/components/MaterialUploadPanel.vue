@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/api/http'
 import { completeUpload, deleteMaterial, getUploadStatus, initializeUpload, listMaterials, putChunk, type Material, type MaterialStatus, type MaterialType, type UploadSession } from '@/api/materials'
 import { missingChunkIndexes } from '@/upload/resume'
+import { cancelTask, republishTask, retryMaterial, type TaskEvent } from '@/api/tasks'
 
 const props = defineProps<{ courseId: string }>()
 const materials = ref<Material[]>([])
@@ -16,6 +17,9 @@ const uploading = ref(false)
 const uploadError = ref('')
 const fileInput = ref<HTMLInputElement | null>(null)
 const dragging = ref(false)
+const progressConnection = ref<'connected' | 'reconnecting'>('reconnecting')
+const taskEvents = ref<Record<string, TaskEvent>>({})
+let progressEvents: EventSource | null = null
 
 const typeOptions: Array<{ value: MaterialType; label: string }> = [
   { value: 'COURSEWARE', label: '课件' }, { value: 'NOTES', label: '笔记' },
@@ -118,7 +122,30 @@ async function remove(material: Material) {
   } catch (error) { if (error !== 'cancel' && error !== 'close') ElMessage.error(describe(error)) }
 }
 
-onMounted(loadMaterials)
+async function taskAction(material: Material, action: 'cancel' | 'republish' | 'retry') {
+  if (!material.taskId) return
+  try {
+    const task = action === 'cancel' ? await cancelTask(material.taskId)
+      : action === 'republish' ? await republishTask(material.taskId) : await retryMaterial(material.id)
+    material.status = task.status
+    ElMessage.success(action === 'cancel' ? '任务已取消' : '任务已重新投递')
+  } catch (error) { ElMessage.error(describe(error)) }
+}
+
+function connectProgress() {
+  progressEvents = new EventSource('/api/v1/tasks/events', { withCredentials: true })
+  progressEvents.onopen = () => { progressConnection.value = 'connected' }
+  progressEvents.onerror = () => { progressConnection.value = 'reconnecting' }
+  progressEvents.addEventListener('task-progress', (event) => {
+    const task = JSON.parse((event as MessageEvent).data) as TaskEvent
+    taskEvents.value[task.taskId] = task
+    const material = materials.value.find((item) => item.taskId === task.taskId)
+    if (material) material.status = task.status
+  })
+}
+
+onMounted(() => { void loadMaterials(); connectProgress() })
+onBeforeUnmount(() => progressEvents?.close())
 </script>
 
 <template>
@@ -141,18 +168,23 @@ onMounted(loadMaterials)
   </section>
 
   <section class="materials" aria-labelledby="materials-title">
-    <h2 id="materials-title">课程资料</h2>
+    <h2 id="materials-title">课程资料</h2><p class="connection" role="status">任务进度：{{ progressConnection === 'connected' ? '实时连接' : '正在重新连接，最终状态仍可恢复' }}</p>
     <p v-if="materials.length === 0" class="empty">还没有资料。</p>
     <el-table v-else class="desktop-table" :data="materials">
       <el-table-column prop="originalFilename" label="文件" min-width="220" />
       <el-table-column label="大小" width="110"><template #default="scope">{{ formatSize(scope.row.sizeBytes) }}</template></el-table-column>
-      <el-table-column label="状态" width="120"><template #default="scope"><span class="status">{{ statusLabels[scope.row.status as MaterialStatus] }}</span></template></el-table-column>
-      <el-table-column label="操作" width="100"><template #default="scope"><el-button v-if="deletable.has(scope.row.status)" link type="danger" @click="remove(scope.row)">删除</el-button></template></el-table-column>
+      <el-table-column label="状态" width="190"><template #default="scope"><span class="status">{{ statusLabels[scope.row.status as MaterialStatus] }}</span><small v-if="scope.row.taskId && taskEvents[scope.row.taskId]">阶段 {{ taskEvents[scope.row.taskId]?.stage }} · {{ taskEvents[scope.row.taskId]?.progress }}%<template v-if="taskEvents[scope.row.taskId]?.message"> · {{ taskEvents[scope.row.taskId]?.message }}</template></small></template></el-table-column>
+      <el-table-column label="操作" width="240"><template #default="scope">
+        <el-button v-if="scope.row.status === 'PUBLISH_FAILED'" link type="primary" @click="taskAction(scope.row, 'republish')">重新投递</el-button>
+        <el-button v-if="scope.row.status === 'FAILED'" link type="primary" @click="taskAction(scope.row, 'retry')">重试</el-button>
+        <el-button v-if="['PENDING_PUBLISH','QUEUED'].includes(scope.row.status)" link @click="taskAction(scope.row, 'cancel')">取消任务</el-button>
+        <el-button v-if="deletable.has(scope.row.status)" link type="danger" @click="remove(scope.row)">删除</el-button>
+      </template></el-table-column>
     </el-table>
-    <div class="mobile-list"><article v-for="material in materials" :key="material.id"><strong>{{ material.originalFilename }}</strong><span>{{ formatSize(material.sizeBytes) }} · {{ statusLabels[material.status] }}</span><el-button v-if="deletable.has(material.status)" link type="danger" @click="remove(material)">删除</el-button></article></div>
+    <div class="mobile-list"><article v-for="material in materials" :key="material.id"><strong>{{ material.originalFilename }}</strong><span>{{ formatSize(material.sizeBytes) }} · {{ statusLabels[material.status] }}</span><div><el-button v-if="material.status === 'PUBLISH_FAILED'" link type="primary" @click="taskAction(material, 'republish')">重新投递</el-button><el-button v-if="material.status === 'FAILED'" link type="primary" @click="taskAction(material, 'retry')">重试</el-button><el-button v-if="['PENDING_PUBLISH','QUEUED'].includes(material.status)" link @click="taskAction(material, 'cancel')">取消任务</el-button><el-button v-if="deletable.has(material.status)" link type="danger" @click="remove(material)">删除</el-button></div></article></div>
   </section>
 </template>
 
 <style scoped>
-.upload-panel,.materials { background: var(--fw-surface); border: 1px solid var(--fw-border); border-radius: 12px; margin-top: 24px; padding: 24px; }h2{font-size:20px;line-height:28px;margin:0 0 4px}.upload-panel>div>p{color:var(--fw-text-secondary);margin:0}.form-grid{display:grid;gap:16px;grid-template-columns:220px 1fr;margin:20px 0}.form-grid label{display:grid;font-weight:600;gap:6px}.drop-zone{align-items:center;background:var(--fw-background);border:1px dashed #9ca3af;border-radius:8px;color:var(--fw-text);cursor:pointer;display:flex;flex-direction:column;gap:4px;padding:28px;width:100%}.drop-zone.dragging{border-color:var(--fw-primary);background:#eff6ff}.drop-zone span{color:var(--fw-text-secondary);font-weight:400}.visually-hidden{height:1px;overflow:hidden;position:absolute;width:1px;clip:rect(0 0 0 0)}.upload-actions{margin-top:16px}.progress{margin-bottom:12px}.error{color:var(--fw-danger)}.empty{color:var(--fw-text-secondary)}.mobile-list{display:none}.status{font-weight:600}@media(max-width:767px){.upload-panel,.materials{padding:20px}.form-grid{grid-template-columns:1fr}.desktop-table{display:none}.mobile-list{display:grid;gap:12px}.mobile-list article{border:1px solid var(--fw-border);border-radius:8px;display:grid;gap:6px;padding:16px}.mobile-list span{color:var(--fw-text-secondary)}}
+.upload-panel,.materials { background: var(--fw-surface); border: 1px solid var(--fw-border); border-radius: 12px; margin-top: 24px; padding: 24px; }h2{font-size:20px;line-height:28px;margin:0 0 4px}.upload-panel>div>p,.connection{color:var(--fw-text-secondary);margin:0}.form-grid{display:grid;gap:16px;grid-template-columns:220px 1fr;margin:20px 0}.form-grid label{display:grid;font-weight:600;gap:6px}.drop-zone{align-items:center;background:var(--fw-background);border:1px dashed #9ca3af;border-radius:8px;color:var(--fw-text);cursor:pointer;display:flex;flex-direction:column;gap:4px;padding:28px;width:100%}.drop-zone.dragging{border-color:var(--fw-primary);background:#eff6ff}.drop-zone span{color:var(--fw-text-secondary);font-weight:400}.visually-hidden{height:1px;overflow:hidden;position:absolute;width:1px;clip:rect(0 0 0 0)}.upload-actions{margin-top:16px}.progress{margin-bottom:12px}.error{color:var(--fw-danger)}.empty{color:var(--fw-text-secondary)}.mobile-list{display:none}.status{display:block;font-weight:600}.status+small{color:var(--fw-text-secondary);display:block;line-height:18px}@media(max-width:767px){.upload-panel,.materials{padding:20px}.form-grid{grid-template-columns:1fr}.desktop-table{display:none}.mobile-list{display:grid;gap:12px}.mobile-list article{border:1px solid var(--fw-border);border-radius:8px;display:grid;gap:6px;padding:16px}.mobile-list span{color:var(--fw-text-secondary)}}
 </style>

@@ -6,6 +6,8 @@ import com.finalweek.course.CourseService;
 import com.finalweek.material.Material;
 import com.finalweek.material.MaterialService;
 import com.finalweek.material.MaterialType;
+import com.finalweek.task.ParseTask;
+import com.finalweek.task.TaskDispatchService;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -30,13 +32,15 @@ public class UploadService {
     private final MaterialService materials;
     private final MaterialFinalizer finalizer;
     private final RedissonClient redisson;
+    private final TaskDispatchService dispatcher;
 
     public UploadService(UploadStateStore states, ObjectStorage storage, StorageProperties storageProperties,
                          FinalWeekProperties properties, UploadFilePolicy filePolicy, CourseService courses,
-                         MaterialService materials, MaterialFinalizer finalizer, RedissonClient redisson) {
+                         MaterialService materials, MaterialFinalizer finalizer, RedissonClient redisson,
+                         TaskDispatchService dispatcher) {
         this.states = states; this.storage = storage; this.storageProperties = storageProperties;
         this.properties = properties; this.filePolicy = filePolicy; this.courses = courses;
-        this.materials = materials; this.finalizer = finalizer; this.redisson = redisson;
+        this.materials = materials; this.finalizer = finalizer; this.redisson = redisson; this.dispatcher = dispatcher;
     }
 
     public UploadMetadata initialize(UUID userId, UUID courseId, String filename, long fileSize,
@@ -90,7 +94,7 @@ public class UploadService {
 
     public CompleteResult complete(UUID userId, UUID uploadId) {
         var cached = states.completed(uploadId);
-        if (cached != null) return new CompleteResult(materials.get(userId, cached), false);
+        if (cached != null) return existingResult(materials.get(userId, cached), false);
         var uploadLock = redisson.getLock("upload-complete:" + uploadId);
         uploadLock.lock();
         try {
@@ -101,7 +105,7 @@ public class UploadService {
                 if (remainingMetadata != null && remainingMetadata.userId().equals(userId)) {
                     finishState(remainingMetadata, material);
                 }
-                return new CompleteResult(material, false);
+                return existingResult(material, false);
             }
             var metadata = requireOwned(userId, uploadId);
             var uploaded = states.chunks(uploadId);
@@ -142,15 +146,16 @@ public class UploadService {
                 if (existing.isPresent()) {
                     var material = finalizer.recordDuplicate(metadata.uploadId(), existing.get());
                     finishState(metadata, material);
-                    return new CompleteResult(material, true);
+                    return existingResult(material, true);
                 }
                 var materialId = UUID.randomUUID();
                 var objectKey = "materials/" + metadata.courseId() + "/" + materialId + "/original";
                 storage.put(objectKey, merged, metadata.mediaType());
                 var course = courses.get(metadata.userId(), metadata.courseId());
-                var material = finalizer.create(metadata.uploadId(), materialId, course, metadata, objectKey, hash);
-                finishState(metadata, material);
-                return new CompleteResult(material, false);
+                var finalized = finalizer.create(metadata.uploadId(), materialId, course, metadata, objectKey, hash);
+                finishState(metadata, finalized.material());
+                dispatcher.dispatch(finalized.task());
+                return new CompleteResult(finalized.material(), finalized.task(), false);
             } finally {
                 if (hashLock.isHeldByCurrentThread()) hashLock.unlock();
             }
@@ -166,6 +171,12 @@ public class UploadService {
     private void finishState(UploadMetadata metadata, Material material) {
         storage.deletePrefix("uploads/" + metadata.uploadId() + "/");
         states.complete(metadata.uploadId(), material.getId(), properties.limits().uploadTtl());
+    }
+
+    private CompleteResult existingResult(Material material, boolean duplicate) {
+        ParseTask task = finalizer.taskFor(material).orElseThrow(() ->
+                new IllegalStateException("资料缺少解析任务: " + material.getId()));
+        return new CompleteResult(material, task, duplicate);
     }
 
     private UploadMetadata requireOwned(UUID userId, UUID uploadId) {
@@ -188,5 +199,5 @@ public class UploadService {
     static String chunkKey(UUID uploadId, int index) { return "uploads/" + uploadId + "/chunks/" + index; }
     public record UploadStatus(UUID uploadId, String status, java.util.List<Integer> uploadedChunks,
                                UUID materialId, Instant expiresAt) {}
-    public record CompleteResult(Material material, boolean duplicate) {}
+    public record CompleteResult(Material material, ParseTask task, boolean duplicate) {}
 }

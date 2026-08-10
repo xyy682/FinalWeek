@@ -8,6 +8,10 @@ import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.finalweek.task.ParseTaskRepository;
+import com.finalweek.task.TaskStatus;
+import com.finalweek.material.MaterialRepository;
+import com.finalweek.material.MaterialStatus;
 
 @Service
 public class CourseService {
@@ -15,14 +19,17 @@ public class CourseService {
     private final CourseRepository courseRepository;
     private final UserAccountRepository userAccountRepository;
     private final FinalWeekProperties properties;
+    private final ParseTaskRepository tasks;
+    private final MaterialRepository materials;
 
     public CourseService(
             CourseRepository courseRepository,
             UserAccountRepository userAccountRepository,
-            FinalWeekProperties properties) {
+            FinalWeekProperties properties, ParseTaskRepository tasks, MaterialRepository materials) {
         this.courseRepository = courseRepository;
         this.userAccountRepository = userAccountRepository;
         this.properties = properties;
+        this.tasks = tasks; this.materials = materials;
     }
 
     @Transactional(readOnly = true)
@@ -55,8 +62,18 @@ public class CourseService {
     @Transactional
     public void delete(UUID userId, UUID courseId) {
         var course = courseRepository.findOwnedByIdForUpdate(courseId, userId).orElseThrow(this::notFound);
-        // Phase 4 extends this transaction with parse-task row locks and state checks.
+        var courseTasks = tasks.lockAllByCourseId(courseId);
+        if (courseTasks.stream().anyMatch(task -> task.getStatus() == TaskStatus.PROCESSING
+                || task.getStatus() == TaskStatus.RETRYING)) {
+            throw new BusinessException(HttpStatus.CONFLICT, "COURSE_TASK_RUNNING", "课程仍有正在执行的任务");
+        }
+        courseTasks.forEach(task -> {
+            if (tasks.cancelUnstarted(task.getId()) == 1 && task.getMaterialId() != null) {
+                materials.updateStatus(task.getMaterialId(), MaterialStatus.CANCELLED);
+            }
+        });
         course.markDeleted();
+        courseRepository.save(course);
     }
 
     private String normalize(String name) {
@@ -67,4 +84,3 @@ public class CourseService {
         return new BusinessException(HttpStatus.NOT_FOUND, "COURSE_NOT_FOUND", "课程不存在或无权访问");
     }
 }
-

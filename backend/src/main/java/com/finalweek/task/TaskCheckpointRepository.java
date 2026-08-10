@@ -1,0 +1,9 @@
+package com.finalweek.task;
+
+import java.util.List;
+import java.util.UUID;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface TaskCheckpointRepository extends JpaRepository<TaskCheckpoint, UUID> {
+    List<TaskCheckpoint> findAllByTask_IdOrderByCompletedAt(UUID taskId);
+}
