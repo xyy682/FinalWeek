@@ -60,6 +60,13 @@ springdoc:
     path: /swagger-ui.html
 
 finalweek:
+  storage:
+    endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+    access-key: ${MINIO_ROOT_USER:finalweek}
+    secret-key: ${MINIO_ROOT_PASSWORD:finalweek_dev_password}
+    bucket: ${MINIO_BUCKET:finalweek}
+    chunk-size: ${UPLOAD_CHUNK_SIZE:8MB}
+    cleanup-interval: ${UPLOAD_CLEANUP_INTERVAL_MINUTES:15}m
   auth:
     code-ttl: ${AUTH_CODE_TTL_MINUTES:10}m
     send-cooldown: ${AUTH_SEND_COOLDOWN_SECONDS:60}s
@@ -104,4 +111,6 @@ spring:
     host: rabbitmq
   mail:
     host: mailpit
-
+finalweek:
+  storage:
+    endpoint: http://minio:9000

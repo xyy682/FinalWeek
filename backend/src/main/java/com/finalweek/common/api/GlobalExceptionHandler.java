@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import com.finalweek.upload.StorageOperationException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -23,6 +24,12 @@ public class GlobalExceptionHandler {
                 .map(error -> error.getField() + "：" + error.getDefaultMessage())
                 .orElse("请求参数不正确");
         return ResponseEntity.badRequest().body(ApiError.of("VALIDATION_FAILED", message, requestId(request)));
+    }
+
+    @ExceptionHandler(StorageOperationException.class)
+    ResponseEntity<ApiError> handleStorage(StorageOperationException exception, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiError.of("STORAGE_UNAVAILABLE", "文件存储暂时不可用，请稍后重试", requestId(request)));
     }
 
     @ExceptionHandler(Exception.class)
