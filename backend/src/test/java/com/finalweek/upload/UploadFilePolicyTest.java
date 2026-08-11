@@ -65,6 +65,6 @@ class UploadFilePolicyTest {
                 new FinalWeekProperties.Limits(8, Duration.ofHours(24), 100, 2048, Duration.ofHours(2), 5, 30, 5, 20),
                 new FinalWeekProperties.Retrieval(20, 20, 8, 60, 512, 64, 10, 1024,
                         "http://localhost:6333", "segments", java.nio.file.Path.of("build/lucene")),
-                new FinalWeekProperties.Ai("https://example.com", "", 3, Duration.ofSeconds(60), Duration.ofSeconds(60), 20, "asr", "ocr", "embedding", "llm"));
+                new FinalWeekProperties.Ai("https://example.com", "", 3, Duration.ofSeconds(60), Duration.ofSeconds(60), Duration.ofSeconds(60), 20, "asr", "ocr", "embedding", "llm"));
     }
 }

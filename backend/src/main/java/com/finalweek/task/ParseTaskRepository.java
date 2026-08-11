@@ -15,6 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
 public interface ParseTaskRepository extends JpaRepository<ParseTask, UUID> {
     Optional<ParseTask> findByIdAndUserId(UUID id, UUID userId);
     Optional<ParseTask> findByMaterial_Id(UUID materialId);
+    Optional<ParseTask> findFirstByCourseIdAndTaskTypeAndStatusInOrderByCreatedAtDesc(
+            UUID courseId, TaskType taskType, List<TaskStatus> statuses);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select task from ParseTask task where task.courseId = :courseId order by task.createdAt")

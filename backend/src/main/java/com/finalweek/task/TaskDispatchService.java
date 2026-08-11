@@ -26,6 +26,14 @@ public class TaskDispatchService {
         }
     }
 
+    public void dispatchAfterRateLimit(ParseTask task) {
+        try { send(task); }
+        catch (RuntimeException exception) {
+            states.publishFailed(task.getId(), task.getExecutionRound(), "MQ_PUBLISH_FAILED", exception.getMessage());
+            log.warn("Task publish failed after acquired rate limit taskId={}", task.getId(), exception);
+        }
+    }
+
     public ParseTask republish(UUID userId, UUID taskId) {
         rateLimiter.acquire(userId);
         var task = states.prepareRepublish(userId, taskId);

@@ -31,6 +31,7 @@ public class ParseTask {
     @Column(name = "api_attempt_count", nullable = false) private int apiAttemptCount;
     @Column(name = "manual_retry_count", nullable = false) private int manualRetryCount;
     @Column(name = "execution_round", nullable = false) private int executionRound;
+    @Column(name = "generation_version") private Long generationVersion;
     @Column(name = "business_key", nullable = false, unique = true, length = 180) private String businessKey;
     @Column(name = "error_code", length = 80) private String errorCode;
     @Column(name = "error_message", length = 500) private String errorMessage;
@@ -46,6 +47,12 @@ public class ParseTask {
         this.currentStage = TaskStage.UPLOADED; this.publishAttemptCount = 1;
         this.businessKey = "PARSE_MATERIAL:" + material.getId();
     }
+    public ParseTask(UUID userId, UUID courseId, long generationVersion) {
+        this.userId = userId; this.courseId = courseId; this.generationVersion = generationVersion;
+        this.taskType = TaskType.GENERATE_OUTLINE; this.status = TaskStatus.PENDING_PUBLISH;
+        this.publishAttemptCount = 1;
+        this.businessKey = "GENERATE_OUTLINE:" + courseId + ":" + generationVersion;
+    }
     @PrePersist void created() { var now = Instant.now(); createdAt = now; updatedAt = now; }
     @PreUpdate void updated() { updatedAt = Instant.now(); }
     public UUID getId() { return id; }
@@ -60,6 +67,7 @@ public class ParseTask {
     public int getApiAttemptCount() { return apiAttemptCount; }
     public int getManualRetryCount() { return manualRetryCount; }
     public int getExecutionRound() { return executionRound; }
+    public Long getGenerationVersion() { return generationVersion; }
     public String getBusinessKey() { return businessKey; }
     public String getErrorCode() { return errorCode; }
     public String getErrorMessage() { return errorMessage; }

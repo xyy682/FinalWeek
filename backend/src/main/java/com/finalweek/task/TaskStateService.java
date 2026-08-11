@@ -51,7 +51,9 @@ public class TaskStateService {
     public void failed(UUID id, int round, String messageId, String code, String message) {
         if (tasks.markFailed(id, round, code, truncate(message)) == 1) {
             var task = tasks.findById(id).orElseThrow();
-            materials.updateStatus(task.getMaterialId(), MaterialStatus.FAILED);
+            if (task.getTaskType() == TaskType.PARSE_MATERIAL) {
+                materials.updateStatus(task.getMaterialId(), MaterialStatus.FAILED);
+            }
             if (failedTasks.findByMessageId(messageId).isEmpty()) failedTasks.save(new FailedTask(task, messageId, truncate(message)));
             progress.publish(task);
         }
@@ -64,7 +66,9 @@ public class TaskStateService {
         if (checkpoints.findByTask_IdAndStage(id, TaskStage.COMPLETED).isEmpty()) {
             checkpoints.save(new TaskCheckpoint(task, TaskStage.COMPLETED, null, "{\"indexed\":true}"));
         }
-        materials.updateStatus(task.getMaterialId(), MaterialStatus.SUCCEEDED);
+        if (task.getTaskType() == TaskType.PARSE_MATERIAL) {
+            materials.updateStatus(task.getMaterialId(), MaterialStatus.SUCCEEDED);
+        }
         failedTasks.findTopByTask_IdOrderByCreatedAtDesc(id).ifPresent(FailedTask::markResolved);
         progress.publish(task);
     }
@@ -100,7 +104,9 @@ public class TaskStateService {
     }
     private ParseTask refresh(UUID id, MaterialStatus status) {
         var task = tasks.findById(id).orElseThrow();
-        if (task.getMaterialId() != null) materials.updateStatus(task.getMaterialId(), status);
+        if (task.getTaskType() == TaskType.PARSE_MATERIAL && task.getMaterialId() != null) {
+            materials.updateStatus(task.getMaterialId(), status);
+        }
         progress.publish(task);
         return task;
     }

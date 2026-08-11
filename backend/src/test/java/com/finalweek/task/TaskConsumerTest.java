@@ -17,7 +17,7 @@ class TaskConsumerTest {
         var pipeline = mock(TaskPipeline.class); var redisson = mock(RedissonClient.class);
         var properties = new TaskProperties("exchange", "parse", "queue", "dlx", "dlq",
                 Duration.ofSeconds(5), Duration.ofSeconds(30), Duration.ofSeconds(30), Duration.ofHours(24), 3);
-        var consumer = new TaskConsumer(states, tasks, pipeline, properties, redisson);
+        var consumer = new TaskConsumer(states, tasks, java.util.List.of(pipeline), properties, redisson);
         var taskId = UUID.randomUUID();
         var command = new TaskMessage(taskId, 1, UUID.randomUUID().toString(), Instant.now());
         var messageProperties = new MessageProperties(); messageProperties.setDeliveryTag(42L);

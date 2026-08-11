@@ -1,6 +1,6 @@
 # FinalWeek
 
-FinalWeek 是面向大学生期末复习的课程资料理解工具。项目按 [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) 串行开发；当前仓库已完成 Phase 1–6（项目基线、登录与课程、分片上传、RabbitMQ 任务引擎与 SSE、五类资料内容提取、课程级混合检索），其余业务能力会在后续阶段逐项交付，不把尚未实现的功能描述成可用能力。
+FinalWeek 是面向大学生期末复习的课程资料理解工具。项目按 [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) 串行开发；当前仓库已完成 Phase 1–7（项目基线、登录与课程、分片上传、RabbitMQ 任务引擎与 SSE、五类资料内容提取、课程级混合检索、知识大纲），其余业务能力会在后续阶段逐项交付，不把尚未实现的功能描述成可用能力。
 
 ## 当前可运行内容
 
@@ -14,6 +14,8 @@ FinalWeek 是面向大学生期末复习的课程资料理解工具。项目按 
 - `CourseSegment` 保存页码、幻灯片号、段落号或起止毫秒；语义优先的固定 token 上限分块保留来源位置，并以 `(material, chunk)` 生成稳定 UUID。任务依次持久化 `UPLOADED → CONTENT_EXTRACTED → CHUNKED → EMBEDDING_COMPLETED → COMPLETED` checkpoint，完整建索引后才原子标记资料成功。
 - 百炼 `text-embedding-v4` 批量向量化后按稳定 segment UUID upsert Qdrant，并携带用户、课程、资料和 segment 隔离字段；Lucene 10 为每门课程维护 BM25 增量索引，同课程写入由本地锁和 Redisson 锁串行化，启动时可按 MySQL 成功资料核对并重建。
 - 混合检索分别执行向量召回与 BM25，使用可配置 RRF（默认 `K=60`）融合、去重并回到 MySQL 解析原文；只返回 `SUCCEEDED` 资料，单路故障自动降级、双路故障明确返回不可用。
+- 知识大纲以独立 RabbitMQ 任务执行，使用混合检索上下文和百炼 JSON 模式生成最多四层、100 节点的树；JSON Schema/Java 双重约束、一次格式修复、来源归属校验和生成版本 CAS 保证失败或旧任务不会覆盖当前大纲。每课最多一个活动生成任务，重复请求返回原任务，限流发生在建任务前。
+- 大纲默认展开前两层，知识点展示高/中/低重要度并可即时保存人工调整；来源抽屉按 PDF 页、幻灯片页、文本段落或音视频时间点定位。重新生成前明确确认，并在成功原子替换时覆盖旧结构及人工重要度。
 - PDF/PPTX 预览统一为短时授权 PDF URL；TXT/MD/MP3/MP4 使用原文件短时 URL，MinIO 支持浏览器 Range 请求。来源片段接口同时校验用户、课程和资料归属。
 - 单个 Compose 项目启动前端、后端、MySQL、Redis、RabbitMQ、MinIO、Qdrant 和 Mailpit；Web API 与未来的 MQ consumer 保持同一后端进程。
 - JUnit、Testcontainers、Vitest 和 Playwright 测试基础。
@@ -90,11 +92,13 @@ corepack pnpm@10.18.3 test
 corepack pnpm@10.18.3 build
 ```
 
-当前 Docker 构建实际执行后端 38 项 JUnit 与前端 5 项 Vitest，并完成类型检查和生产构建。自动化测试覆盖登录、权限、Redis 门禁、分片写入顺序、缺片、顺序合并、哈希、重复资料、过期清理、任务投递失败补偿、旧执行轮次去重、原生/扫描 PDF、文本分段、音视频双路合并、固定 overlap 分块、稳定 segment ID、Lucene 并发/幂等/重建、RRF 去重与检索降级，以及前端 30%/70%/99% 差集计算。
+当前构建实际执行后端 47 项 JUnit 与前端 5 项 Vitest，并完成类型检查和生产构建。自动化测试覆盖登录、权限、Redis 门禁、分片写入顺序、缺片、顺序合并、哈希、重复资料、过期清理、任务投递失败补偿、旧执行轮次去重、原生/扫描 PDF、文本分段、音视频双路合并、固定 overlap 分块、稳定 segment ID、Lucene 并发/幂等/重建、RRF 去重与检索降级、大纲格式修复、非法来源、活动任务去重、限流不建任务及旧生成版本拒绝覆盖，以及前端 30%/70%/99% 差集计算。
 
 Phase 5 真实验证使用五种格式逐一走完登录、建课、分片上传、RabbitMQ 消费和来源读取：PDF/PPTX/TXT 生成正确页/幻灯片/段落位置，MP3 生成句级时间戳，MP4 以一次 ASR 和一次 OCR 合并音轨与画面文字；五种预览均验证 Range `206`，来源接口验证所属用户 `200`、其他用户 `404`、匿名 `401`。完整 Playwright 主流程会在 Phase 11 随业务闭环一起验收。目前没有 AI Golden Case 评测结果、性能数字或生产 SLA 声明。
 
 Phase 6 真实验证使用无仓库信息的合成文本走完上传、分块、百炼 embedding、Qdrant 与 Lucene：任务以一次 API 调用成功，五个 checkpoint 顺序完整，Qdrant point ID 与 segment ID 相同且隔离 payload 完整，课程 Lucene 索引落盘。混合排序、单路降级、所有权过滤、重复 upsert、同课程并发写入和故障重建由自动化测试覆盖。
+
+Phase 7 真实验证在同一合成课程上使用百炼 `qwen3.7-plus` 生成大纲：并发请求返回同一活动任务，任务一次调用成功并依次完成 `CONTEXT_RETRIEVED → OUTLINE_GENERATED → COMPLETED`；7 个节点均带有效来源。人工重要度跨刷新保留，其他用户修改返回 404；故意触发的持久化失败完整回滚并保留旧版本，修复后版本 3 原子替换版本 1，失败的版本 2 未覆盖数据，最终仅保留一份当前大纲且无活动任务。
 
 ## 配置与密钥
 

@@ -42,6 +42,7 @@ public record FinalWeekProperties(
             String endpoint,
             String apiKey,
             int maxAttempts,
+            Duration outlineRequestTimeout,
             Duration planRequestTimeout,
             Duration chatRequestTimeout,
             int chatHistoryLimit,

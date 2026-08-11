@@ -69,7 +69,7 @@ public class TaskProgressService {
                            TaskStage currentStage, int publishAttemptCount, int deliveryAttemptCount,
                            int apiAttemptCount, int manualRetryCount, int executionRound,
                            String errorCode, String errorMessage, Instant updatedAt) {
-        static TaskView from(ParseTask task) {
+        public static TaskView from(ParseTask task) {
             return new TaskView(task.getId(), task.getCourseId(), task.getMaterialId(), task.getTaskType(),
                     task.getStatus(), task.getCurrentStage(), task.getPublishAttemptCount(),
                     task.getDeliveryAttemptCount(), task.getApiAttemptCount(), task.getManualRetryCount(),

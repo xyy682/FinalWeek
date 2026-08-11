@@ -3,6 +3,7 @@ package com.finalweek.task;
 import com.rabbitmq.client.Channel;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
+import java.util.List;
 import org.redisson.api.RedissonClient;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -12,12 +13,12 @@ import org.springframework.stereotype.Service;
 public class TaskConsumer {
     private final TaskStateService states;
     private final ParseTaskRepository tasks;
-    private final TaskPipeline pipeline;
+    private final List<TaskPipeline> pipelines;
     private final TaskProperties properties;
     private final RedissonClient redisson;
-    public TaskConsumer(TaskStateService states, ParseTaskRepository tasks, TaskPipeline pipeline,
+    public TaskConsumer(TaskStateService states, ParseTaskRepository tasks, List<TaskPipeline> pipelines,
                         TaskProperties properties, RedissonClient redisson) {
-        this.states = states; this.tasks = tasks; this.pipeline = pipeline;
+        this.states = states; this.tasks = tasks; this.pipelines = pipelines;
         this.properties = properties; this.redisson = redisson;
     }
 
@@ -35,6 +36,8 @@ public class TaskConsumer {
                 retryOrFail(command, tag, channel, "TASK_LOCK_BUSY", "任务正在另一消费者执行"); return;
             }
             var task = tasks.findById(command.taskId()).orElseThrow();
+            var pipeline = pipelines.stream().filter(value -> value.type() == task.getTaskType()).findFirst()
+                    .orElseThrow(() -> new PermanentTaskException("TASK_TYPE_UNSUPPORTED", "任务类型没有处理器"));
             pipeline.execute(task);
             states.succeeded(command.taskId(), command.executionRound());
             channel.basicAck(tag, false);

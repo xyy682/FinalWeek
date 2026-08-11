@@ -51,3 +51,9 @@ export const completeUpload = (uploadId: string) =>
 export const deleteMaterial = (materialId: string) => apiFetch<void>(`/materials/${materialId}`, { method: 'DELETE' })
 export interface MaterialPreview { url: string; mediaType: string; expiresAt: string; normalizedPdf: boolean; supportsTimeSeek: boolean }
 export const getMaterialPreview = (materialId: string) => apiFetch<MaterialPreview>(`/materials/${materialId}/preview`)
+export interface SourceSegment {
+  id: string; materialId: string; content: string; sourceType: string
+  pageNumber: number | null; slideNumber: number | null; paragraphNumber: number | null
+  startTimeMs: number | null; endTimeMs: number | null
+}
+export const getSourceSegment = (segmentId: string) => apiFetch<SourceSegment>(`/segments/${segmentId}`)

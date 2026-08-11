@@ -32,6 +32,9 @@ public class Course {
     @Column(nullable = false)
     private boolean deleted;
 
+    @Column(name = "outline_generation_seq", nullable = false)
+    private long outlineGenerationSequence;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -80,5 +83,7 @@ public class Course {
     public void markDeleted() {
         this.deleted = true;
     }
-}
 
+    public long nextOutlineGeneration() { return ++outlineGenerationSequence; }
+    public long getOutlineGenerationSequence() { return outlineGenerationSequence; }
+}

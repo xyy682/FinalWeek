@@ -117,6 +117,7 @@ finalweek:
     endpoint: ${BAILIAN_ENDPOINT:https://dashscope.aliyuncs.com}
     api-key: ${BAILIAN_API_KEY:}
     max-attempts: ${BAILIAN_MAX_ATTEMPTS:3}
+    outline-request-timeout: ${OUTLINE_REQUEST_TIMEOUT_SECONDS:180}s
     plan-request-timeout: ${PLAN_REQUEST_TIMEOUT_SECONDS:60}s
     chat-request-timeout: ${CHAT_REQUEST_TIMEOUT_SECONDS:60}s
     chat-history-limit: ${CHAT_HISTORY_LIMIT:20}

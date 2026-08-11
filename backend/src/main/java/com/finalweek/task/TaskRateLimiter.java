@@ -24,6 +24,12 @@ public class TaskRateLimiter {
         global.trySetRate(RateType.OVERALL, properties.limits().parseGlobalRatePerMinute(), Duration.ofMinutes(1));
         if (!global.tryAcquire()) throw limited();
     }
+
+    public void acquirePlan(UUID userId) {
+        var perUser = redisson.getRateLimiter("fw:rate:plan:user:" + userId);
+        perUser.trySetRate(RateType.OVERALL, properties.limits().planUserRatePerMinute(), Duration.ofMinutes(1));
+        if (!perUser.tryAcquire()) throw limited();
+    }
     private BusinessException limited() {
         return new BusinessException(HttpStatus.TOO_MANY_REQUESTS, "TASK_PUBLISH_RATE_LIMITED", "任务发布过于频繁，请稍后重试");
     }

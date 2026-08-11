@@ -34,6 +34,7 @@ public class MaterialParsePipeline implements TaskPipeline {
         this.mapper = mapper; this.checkpoints = checkpoints; this.knowledgeCheckpoints = knowledgeCheckpoints;
         this.chunker = chunker; this.indexer = indexer; this.segments = segments;
     }
+    @Override public com.finalweek.task.TaskType type() { return com.finalweek.task.TaskType.PARSE_MATERIAL; }
     @Override public void execute(ParseTask task) {
         if (!checkpoints.completed(task.getId())) extract(task);
         var context = loadContext(task);
