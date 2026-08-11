@@ -1,0 +1,9 @@
+{
+  "caseVersion": "2026.08.1",
+  "caseCount": 8,
+  "thresholds": {
+    "coverage": 0.80,
+    "citationAccuracy": 0.90,
+    "ungroundedUnmarkedRatio": 0.10
+  }
+}

@@ -1,0 +1,307 @@
+{
+  "schemaVersion" : "1.0",
+  "run" : {
+    "startedAt" : "2026-08-11T13:00:19.072423149Z",
+    "finishedAt" : "2026-08-11T13:00:56.760595312Z",
+    "durationMs" : 37688,
+    "commit" : "d88c65fd86b429a987e816c517171a3f9f64ea63",
+    "caseVersion" : "2026.08.1",
+    "inputVersion" : "2026.08.1",
+    "modelIds" : {
+      "llm" : "qwen3.7-plus",
+      "embedding" : "text-embedding-v4",
+      "ocr" : "qwen-vl-ocr-latest",
+      "asr" : "paraformer-realtime-v2"
+    },
+    "configuration" : {
+      "caseCount" : 8,
+      "timeoutSeconds" : 60,
+      "endpoint" : "https://dashscope.aliyuncs.com",
+      "thresholds" : {
+        "coverage" : 0.8,
+        "citationAccuracy" : 0.9,
+        "ungroundedUnmarkedRatio" : 0.1
+      }
+    }
+  },
+  "cases" : [ {
+    "id" : "native-pdf-outline",
+    "kind" : "OUTLINE",
+    "output" : {
+      "nodes" : [ {
+        "title" : "热力学第一定律",
+        "importance" : "HIGH",
+        "sourceSegmentIds" : [ "10000000-0000-0000-0000-000000000001" ],
+        "children" : [ {
+          "title" : "基本定义",
+          "importance" : "HIGH",
+          "sourceSegmentIds" : [ "10000000-0000-0000-0000-000000000001" ],
+          "children" : [ ]
+        }, {
+          "title" : "等容过程应用",
+          "importance" : "MEDIUM",
+          "sourceSegmentIds" : [ "10000000-0000-0000-0000-000000000002" ],
+          "children" : [ {
+            "title" : "体积不变与边界功为零",
+            "importance" : "MEDIUM",
+            "sourceSegmentIds" : [ "10000000-0000-0000-0000-000000000002" ],
+            "children" : [ ]
+          }, {
+            "title" : "热量等于内能增量",
+            "importance" : "MEDIUM",
+            "sourceSegmentIds" : [ "10000000-0000-0000-0000-000000000002" ],
+            "children" : [ ]
+          } ]
+        } ]
+      } ]
+    },
+    "scores" : {
+      "coverage" : 1.0,
+      "citationAccuracy" : 1.0,
+      "importanceConsistency" : 0.0,
+      "ungroundedUnmarkedRatio" : 0.0
+    },
+    "passed" : true,
+    "failureReason" : null
+  }, {
+    "id" : "scanned-pdf-outline",
+    "kind" : "OUTLINE",
+    "output" : {
+      "nodes" : [ {
+        "title" : "机会成本",
+        "importance" : "HIGH",
+        "sourceSegmentIds" : [ "20000000-0000-0000-0000-000000000001" ],
+        "children" : [ ]
+      }, {
+        "title" : "沉没成本",
+        "importance" : "HIGH",
+        "sourceSegmentIds" : [ "20000000-0000-0000-0000-000000000002" ],
+        "children" : [ ]
+      } ]
+    },
+    "scores" : {
+      "coverage" : 1.0,
+      "citationAccuracy" : 1.0,
+      "importanceConsistency" : 0.0,
+      "ungroundedUnmarkedRatio" : 0.0
+    },
+    "passed" : true,
+    "failureReason" : null
+  }, {
+    "id" : "ppt-outline",
+    "kind" : "OUTLINE",
+    "output" : {
+      "nodes" : [ {
+        "title" : "TCP 可靠传输机制",
+        "importance" : "HIGH",
+        "sourceSegmentIds" : [ "30000000-0000-0000-0000-000000000003" ],
+        "children" : [ {
+          "title" : "序号",
+          "importance" : "MEDIUM",
+          "sourceSegmentIds" : [ "30000000-0000-0000-0000-000000000003" ],
+          "children" : [ ]
+        }, {
+          "title" : "确认应答",
+          "importance" : "MEDIUM",
+          "sourceSegmentIds" : [ "30000000-0000-0000-0000-000000000003" ],
+          "children" : [ ]
+        }, {
+          "title" : "重传",
+          "importance" : "MEDIUM",
+          "sourceSegmentIds" : [ "30000000-0000-0000-0000-000000000003" ],
+          "children" : [ ]
+        } ]
+      }, {
+        "title" : "TCP 拥塞控制",
+        "importance" : "HIGH",
+        "sourceSegmentIds" : [ "30000000-0000-0000-0000-000000000004" ],
+        "children" : [ {
+          "title" : "慢启动",
+          "importance" : "MEDIUM",
+          "sourceSegmentIds" : [ "30000000-0000-0000-0000-000000000004" ],
+          "children" : [ ]
+        }, {
+          "title" : "拥塞避免",
+          "importance" : "MEDIUM",
+          "sourceSegmentIds" : [ "30000000-0000-0000-0000-000000000004" ],
+          "children" : [ ]
+        }, {
+          "title" : "快重传",
+          "importance" : "MEDIUM",
+          "sourceSegmentIds" : [ "30000000-0000-0000-0000-000000000004" ],
+          "children" : [ ]
+        }, {
+          "title" : "快恢复",
+          "importance" : "MEDIUM",
+          "sourceSegmentIds" : [ "30000000-0000-0000-0000-000000000004" ],
+          "children" : [ ]
+        } ]
+      } ]
+    },
+    "scores" : {
+      "coverage" : 1.0,
+      "citationAccuracy" : 1.0,
+      "importanceConsistency" : 0.0,
+      "ungroundedUnmarkedRatio" : 0.0
+    },
+    "passed" : true,
+    "failureReason" : null
+  }, {
+    "id" : "audio-outline",
+    "kind" : "OUTLINE",
+    "output" : {
+      "nodes" : [ {
+        "title" : "梯度下降",
+        "importance" : "HIGH",
+        "sourceSegmentIds" : [ "40000000-0000-0000-0000-000000000001" ],
+        "children" : [ {
+          "title" : "参数更新规则",
+          "importance" : "MEDIUM",
+          "sourceSegmentIds" : [ "40000000-0000-0000-0000-000000000001" ],
+          "children" : [ ]
+        }, {
+          "title" : "学习率影响",
+          "importance" : "MEDIUM",
+          "sourceSegmentIds" : [ "40000000-0000-0000-0000-000000000002" ],
+          "children" : [ ]
+        } ]
+      } ]
+    },
+    "scores" : {
+      "coverage" : 1.0,
+      "citationAccuracy" : 1.0,
+      "importanceConsistency" : 1.0,
+      "ungroundedUnmarkedRatio" : 0.0
+    },
+    "passed" : true,
+    "failureReason" : null
+  }, {
+    "id" : "video-complement-outline",
+    "kind" : "OUTLINE",
+    "output" : {
+      "nodes" : [ {
+        "title" : "牛顿第二定律",
+        "importance" : "HIGH",
+        "sourceSegmentIds" : [ "50000000-0000-0000-0000-000000000001", "50000000-0000-0000-0000-000000000002" ],
+        "children" : [ {
+          "title" : "物理规律描述",
+          "importance" : "MEDIUM",
+          "sourceSegmentIds" : [ "50000000-0000-0000-0000-000000000001" ],
+          "children" : [ {
+            "title" : "加速度与合外力成正比",
+            "importance" : "MEDIUM",
+            "sourceSegmentIds" : [ "50000000-0000-0000-0000-000000000001" ],
+            "children" : [ ]
+          }, {
+            "title" : "加速度与质量成反比",
+            "importance" : "MEDIUM",
+            "sourceSegmentIds" : [ "50000000-0000-0000-0000-000000000001" ],
+            "children" : [ ]
+          } ]
+        }, {
+          "title" : "公式与单位",
+          "importance" : "HIGH",
+          "sourceSegmentIds" : [ "50000000-0000-0000-0000-000000000002" ],
+          "children" : [ {
+            "title" : "公式 F=ma",
+            "importance" : "HIGH",
+            "sourceSegmentIds" : [ "50000000-0000-0000-0000-000000000002" ],
+            "children" : [ ]
+          }, {
+            "title" : "力的单位：牛顿",
+            "importance" : "MEDIUM",
+            "sourceSegmentIds" : [ "50000000-0000-0000-0000-000000000002" ],
+            "children" : [ ]
+          } ]
+        } ]
+      } ]
+    },
+    "scores" : {
+      "coverage" : 1.0,
+      "citationAccuracy" : 1.0,
+      "importanceConsistency" : 0.0,
+      "ungroundedUnmarkedRatio" : 0.0
+    },
+    "passed" : true,
+    "failureReason" : null
+  }, {
+    "id" : "past-exam-importance",
+    "kind" : "OUTLINE",
+    "output" : {
+      "nodes" : [ {
+        "title" : "二叉树遍历",
+        "importance" : "HIGH",
+        "sourceSegmentIds" : [ "60000000-0000-0000-0000-000000000001" ],
+        "children" : [ {
+          "title" : "前序遍历",
+          "importance" : "MEDIUM",
+          "sourceSegmentIds" : [ "60000000-0000-0000-0000-000000000002" ],
+          "children" : [ ]
+        }, {
+          "title" : "中序遍历",
+          "importance" : "MEDIUM",
+          "sourceSegmentIds" : [ "60000000-0000-0000-0000-000000000002" ],
+          "children" : [ ]
+        }, {
+          "title" : "后序遍历",
+          "importance" : "MEDIUM",
+          "sourceSegmentIds" : [ "60000000-0000-0000-0000-000000000002" ],
+          "children" : [ ]
+        } ]
+      } ]
+    },
+    "scores" : {
+      "coverage" : 1.0,
+      "citationAccuracy" : 1.0,
+      "importanceConsistency" : 1.0,
+      "ungroundedUnmarkedRatio" : 0.0
+    },
+    "passed" : true,
+    "failureReason" : null
+  }, {
+    "id" : "answerable-chat",
+    "kind" : "CHAT",
+    "output" : {
+      "answer" : "F=ma",
+      "sourceSegmentIds" : [ "70000000-0000-0000-0000-000000000002" ],
+      "generalKnowledgeSupplement" : null
+    },
+    "scores" : {
+      "coverage" : 1.0,
+      "citationAccuracy" : 1.0,
+      "importanceConsistency" : 1.0,
+      "ungroundedUnmarkedRatio" : 0.0
+    },
+    "passed" : true,
+    "failureReason" : null
+  }, {
+    "id" : "unanswerable-chat",
+    "kind" : "CHAT",
+    "output" : {
+      "answer" : "资料不足",
+      "sourceSegmentIds" : [ ],
+      "generalKnowledgeSupplement" : null
+    },
+    "scores" : {
+      "coverage" : 1.0,
+      "citationAccuracy" : 1.0,
+      "importanceConsistency" : 1.0,
+      "ungroundedUnmarkedRatio" : 0.0
+    },
+    "passed" : true,
+    "failureReason" : null
+  } ],
+  "summary" : {
+    "coverage" : 1.0,
+    "citationAccuracy" : 1.0,
+    "importanceConsistency" : 0.3333333333333333,
+    "ungroundedUnmarkedRatio" : 0.0
+  },
+  "thresholds" : {
+    "coverage" : 0.8,
+    "citationAccuracy" : 0.9,
+    "ungroundedUnmarkedRatio" : 0.1
+  },
+  "passed" : true,
+  "failures" : [ ]
+}

@@ -1,0 +1,1 @@
+{"id":"past-exam-importance","kind":"OUTLINE","fixture":"past-exam.txt","annotation":"06-past-exam.json","segments":[{"id":"60000000-0000-0000-0000-000000000001","content":"历年真题统计：二叉树遍历连续三年为大题。"},{"id":"60000000-0000-0000-0000-000000000002","content":"前序是根左右，中序是左根右，后序是左右根。"}]}

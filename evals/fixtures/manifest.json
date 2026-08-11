@@ -1,0 +1,12 @@
+{
+  "version": "2026.08.1",
+  "description": "Phase 5 已抽取内容的稳定快照，避免第三方 ASR/OCR 波动影响 Phase 10 AI 回归。",
+  "files": [
+    {"path":"native-pdf.txt","mediaType":"application/pdf","sha256":"2b2a54aab0fba6b3b80cf8e6079b68789667ebe0b3c849c1aea39f7aee898d6b"},
+    {"path":"scanned-pdf.txt","mediaType":"application/pdf;mode=scanned","sha256":"3edabc1d68642ae19ace96fb717e672d8c58bab5b653207120e719f4110fd386"},
+    {"path":"slides.txt","mediaType":"application/vnd.openxmlformats-officedocument.presentationml.presentation","sha256":"d370dac11fcb2f94fc9c9dde5e1d9840bb50f79aaa8a26e66b6507d62404c10e"},
+    {"path":"audio.txt","mediaType":"audio/mpeg","sha256":"3ae083a5c8bf7c3866158986511d4ee224c7d2ec15612c80348c25654427e866"},
+    {"path":"video.txt","mediaType":"video/mp4","sha256":"c42b5690ba5c408ae62f5cedfd3cc08e39e1330f691673908db05d16a7fcb238"},
+    {"path":"past-exam.txt","mediaType":"text/plain;materialType=PAST_EXAM","sha256":"f8cbe6cfd74ec8f11aa24bd8e1e781c2e29c277afccc08ab59fb17c5f3071260"}
+  ]
+}

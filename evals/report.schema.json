@@ -1,0 +1,15 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"https://finalweek.local/schemas/golden-report.json",
+  "type":"object",
+  "required":["schemaVersion","run","cases","summary","thresholds","passed","failures"],
+  "properties":{
+    "schemaVersion":{"type":"string"},
+    "run":{"type":"object","required":["startedAt","finishedAt","durationMs","commit","caseVersion","inputVersion","modelIds","configuration"],"properties":{"startedAt":{"type":"string"},"finishedAt":{"type":"string"},"durationMs":{"type":"integer"},"commit":{"type":"string"},"caseVersion":{"type":"string"},"inputVersion":{"type":"string"},"modelIds":{"type":"object"},"configuration":{"type":"object"}}},
+    "cases":{"type":"array","items":{"type":"object","required":["id","kind","output","scores","passed","failureReason"],"properties":{"id":{"type":"string"},"kind":{"type":"string"},"output":{"type":"object"},"scores":{"type":"object","required":["coverage","citationAccuracy","importanceConsistency","ungroundedUnmarkedRatio"]},"passed":{"type":"boolean"}}}},
+    "summary":{"type":"object","required":["coverage","citationAccuracy","importanceConsistency","ungroundedUnmarkedRatio"],"properties":{"coverage":{"type":"number"},"citationAccuracy":{"type":"number"},"importanceConsistency":{"type":"number"},"ungroundedUnmarkedRatio":{"type":"number"}}},
+    "thresholds":{"type":"object","required":["coverage","citationAccuracy","ungroundedUnmarkedRatio"],"properties":{"coverage":{"type":"number"},"citationAccuracy":{"type":"number"},"ungroundedUnmarkedRatio":{"type":"number"}}},
+    "passed":{"type":"boolean"},
+    "failures":{"type":"array","items":{"type":"string"}}
+  }
+}
