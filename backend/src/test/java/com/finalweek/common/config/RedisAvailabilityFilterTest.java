@@ -19,7 +19,8 @@ import org.springframework.mock.web.MockFilterChain;
 class RedisAvailabilityFilterTest {
 
     @ParameterizedTest
-    @ValueSource(strings = {"/api/v1/auth/login", "/api/v1/courses", "/api/v1/courses/1/chat"})
+    @ValueSource(strings = {"/api/v1/auth/login", "/api/v1/courses", "/api/v1/courses/1/messages",
+            "/api/v1/chat-messages/1/retry"})
     void loginAuthenticatedAndAiApisFailClosedWithStable503(String path) throws Exception {
         var redis = mock(StringRedisTemplate.class);
         doThrow(new RedisConnectionFailureException("offline")).when(redis).hasKey("fw:health:redis");

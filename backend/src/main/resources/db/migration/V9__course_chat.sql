@@ -1,0 +1,21 @@
+CREATE TABLE chat_message (
+    id BINARY(16) NOT NULL,
+    user_id BINARY(16) NOT NULL,
+    course_id BINARY(16) NOT NULL,
+    role VARCHAR(10) NOT NULL,
+    content LONGTEXT NOT NULL,
+    source_refs_json JSON NOT NULL,
+    general_knowledge_used BOOLEAN NOT NULL DEFAULT FALSE,
+    general_knowledge_content LONGTEXT NULL,
+    status VARCHAR(10) NOT NULL,
+    reply_to_id BINARY(16) NULL,
+    error_code VARCHAR(80) NULL,
+    created_at TIMESTAMP(6) NOT NULL,
+    updated_at TIMESTAMP(6) NOT NULL,
+    PRIMARY KEY (id),
+    CONSTRAINT uk_chat_message_reply UNIQUE (reply_to_id),
+    CONSTRAINT fk_chat_message_user FOREIGN KEY (user_id) REFERENCES user_account (id),
+    CONSTRAINT fk_chat_message_course FOREIGN KEY (course_id) REFERENCES course (id),
+    CONSTRAINT fk_chat_message_reply FOREIGN KEY (reply_to_id) REFERENCES chat_message (id) ON DELETE CASCADE,
+    INDEX idx_chat_message_course_time (course_id, created_at, id)
+);

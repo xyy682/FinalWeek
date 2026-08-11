@@ -30,6 +30,12 @@ public class TaskRateLimiter {
         perUser.trySetRate(RateType.OVERALL, properties.limits().planUserRatePerMinute(), Duration.ofMinutes(1));
         if (!perUser.tryAcquire()) throw limited();
     }
+    public void acquireChat(UUID userId) {
+        var perUser = redisson.getRateLimiter("fw:rate:chat:user:" + userId);
+        perUser.trySetRate(RateType.OVERALL, properties.limits().chatUserRatePerMinute(), Duration.ofMinutes(1));
+        if (!perUser.tryAcquire()) throw new BusinessException(HttpStatus.TOO_MANY_REQUESTS,
+                "CHAT_RATE_LIMITED", "问答过于频繁，请稍后重试");
+    }
     private BusinessException limited() {
         return new BusinessException(HttpStatus.TOO_MANY_REQUESTS, "TASK_PUBLISH_RATE_LIMITED", "任务发布过于频繁，请稍后重试");
     }
