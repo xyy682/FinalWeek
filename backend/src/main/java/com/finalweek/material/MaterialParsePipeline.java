@@ -1,7 +1,10 @@
 package com.finalweek.material;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.finalweek.knowledge.KnowledgeIndexer;
+import com.finalweek.knowledge.SemanticChunker;
 import com.finalweek.task.ExtractionCheckpointService;
+import com.finalweek.task.KnowledgeCheckpointService;
 import com.finalweek.task.ParseTask;
 import com.finalweek.task.PermanentTaskException;
 import com.finalweek.task.RetryableTaskException;
@@ -19,13 +22,34 @@ public class MaterialParsePipeline implements TaskPipeline {
     private final ObjectStorage storage;
     private final ObjectMapper mapper;
     private final ExtractionCheckpointService checkpoints;
+    private final KnowledgeCheckpointService knowledgeCheckpoints;
+    private final SemanticChunker chunker;
+    private final KnowledgeIndexer indexer;
+    private final CourseSegmentRepository segments;
     public MaterialParsePipeline(MaterialRepository materials, List<MaterialParser> parsers, ObjectStorage storage,
-                                 ObjectMapper mapper, ExtractionCheckpointService checkpoints) {
+                                 ObjectMapper mapper, ExtractionCheckpointService checkpoints,
+                                 KnowledgeCheckpointService knowledgeCheckpoints, SemanticChunker chunker,
+                                 KnowledgeIndexer indexer, CourseSegmentRepository segments) {
         this.materials = materials; this.parsers = parsers; this.storage = storage;
-        this.mapper = mapper; this.checkpoints = checkpoints;
+        this.mapper = mapper; this.checkpoints = checkpoints; this.knowledgeCheckpoints = knowledgeCheckpoints;
+        this.chunker = chunker; this.indexer = indexer; this.segments = segments;
     }
     @Override public void execute(ParseTask task) {
-        if (checkpoints.completed(task.getId())) throw nextStage();
+        if (!checkpoints.completed(task.getId())) extract(task);
+        var context = loadContext(task);
+        if (!knowledgeCheckpoints.completed(task.getId(), com.finalweek.task.TaskStage.CHUNKED)) {
+            var chunks = chunker.chunk(context);
+            if (chunks.isEmpty()) throw new PermanentTaskException("CONTENT_EMPTY", "资料没有可建立索引的正文");
+            knowledgeCheckpoints.chunked(task.getId(), context, chunks);
+        }
+        if (!knowledgeCheckpoints.completed(task.getId(), com.finalweek.task.TaskStage.EMBEDDING_COMPLETED)) {
+            var chunkedSegments = segments.findAllByMaterial_IdOrderByChunkNo(task.getMaterialId());
+            indexer.index(task, chunkedSegments);
+            knowledgeCheckpoints.embeddingCompleted(task.getId(), chunkedSegments.size());
+        }
+    }
+
+    private void extract(ParseTask task) {
         Path work = null;
         try {
             var material = materials.findById(task.getMaterialId()).orElseThrow(() ->
@@ -52,13 +76,16 @@ public class MaterialParsePipeline implements TaskPipeline {
             var contextKey = "derived/" + material.getId() + "/content-extracted.json";
             storage.put(contextKey, contextFile, "application/json");
             checkpoints.complete(task.getId(), context, contextKey);
-            throw nextStage();
         } catch (PermanentTaskException | RetryableTaskException exception) { throw exception; }
         catch (Exception exception) { throw new RetryableTaskException("EXTRACTION_IO_FAILED", "资料提取过程暂时失败"); }
         finally { if (work != null) deleteTree(work); }
     }
-    private RetryableTaskException nextStage() {
-        return new RetryableTaskException("NEXT_STAGE_NOT_READY", "内容提取已完成，等待阶段 6 建立索引");
+
+    private CourseContext loadContext(ParseTask task) {
+        try (var input = storage.get(checkpoints.contextObjectKey(task.getId()))) {
+            return mapper.readValue(input, CourseContext.class);
+        } catch (PermanentTaskException | RetryableTaskException exception) { throw exception; }
+        catch (Exception exception) { throw new RetryableTaskException("CHECKPOINT_READ_FAILED", "内容提取 checkpoint 暂时无法读取"); }
     }
     private void deleteTree(Path root) {
         try (var paths = Files.walk(root)) {

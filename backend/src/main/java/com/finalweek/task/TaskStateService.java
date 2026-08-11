@@ -13,11 +13,14 @@ public class TaskStateService {
     private final ParseTaskRepository tasks;
     private final MaterialRepository materials;
     private final FailedTaskRepository failedTasks;
+    private final TaskCheckpointRepository checkpoints;
     private final TaskProgressService progress;
 
     public TaskStateService(ParseTaskRepository tasks, MaterialRepository materials,
-                            FailedTaskRepository failedTasks, TaskProgressService progress) {
-        this.tasks = tasks; this.materials = materials; this.failedTasks = failedTasks; this.progress = progress;
+                            FailedTaskRepository failedTasks, TaskCheckpointRepository checkpoints,
+                            TaskProgressService progress) {
+        this.tasks = tasks; this.materials = materials; this.failedTasks = failedTasks;
+        this.checkpoints = checkpoints; this.progress = progress;
     }
 
     @Transactional(readOnly = true)
@@ -56,9 +59,14 @@ public class TaskStateService {
 
     @Transactional
     public void succeeded(UUID id, int round) {
-        if (changed(tasks.markSucceeded(id, round), id, MaterialStatus.SUCCEEDED)) {
-            failedTasks.findTopByTask_IdOrderByCreatedAtDesc(id).ifPresent(FailedTask::markResolved);
+        if (tasks.markSucceeded(id, round) != 1) return;
+        var task = tasks.findById(id).orElseThrow();
+        if (checkpoints.findByTask_IdAndStage(id, TaskStage.COMPLETED).isEmpty()) {
+            checkpoints.save(new TaskCheckpoint(task, TaskStage.COMPLETED, null, "{\"indexed\":true}"));
         }
+        materials.updateStatus(task.getMaterialId(), MaterialStatus.SUCCEEDED);
+        failedTasks.findTopByTask_IdOrderByCreatedAtDesc(id).ifPresent(FailedTask::markResolved);
+        progress.publish(task);
     }
 
     @Transactional

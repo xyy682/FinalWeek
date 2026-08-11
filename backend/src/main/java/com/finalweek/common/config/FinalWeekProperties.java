@@ -1,6 +1,7 @@
 package com.finalweek.common.config;
 
 import java.time.Duration;
+import java.nio.file.Path;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties("finalweek")
@@ -24,7 +25,18 @@ public record FinalWeekProperties(
             int planUserRatePerMinute,
             int chatUserRatePerMinute) {}
 
-    public record Retrieval(int vectorTopK, int bm25TopK, int finalTopK, int rrfK) {}
+    public record Retrieval(
+            int vectorTopK,
+            int bm25TopK,
+            int finalTopK,
+            int rrfK,
+            int chunkMaxTokens,
+            int chunkOverlapTokens,
+            int embeddingBatchSize,
+            int embeddingDimensions,
+            String qdrantEndpoint,
+            String qdrantCollection,
+            Path luceneIndexPath) {}
 
     public record Ai(
             String endpoint,

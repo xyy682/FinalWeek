@@ -25,6 +25,11 @@ public class ExtractionCheckpointService {
     public boolean completed(UUID taskId) {
         return checkpoints.findByTask_IdAndStage(taskId, TaskStage.CONTENT_EXTRACTED).isPresent();
     }
+    @Transactional(readOnly = true)
+    public String contextObjectKey(UUID taskId) {
+        return checkpoints.findByTask_IdAndStage(taskId, TaskStage.CONTENT_EXTRACTED)
+                .map(TaskCheckpoint::getResultObjectKey).orElseThrow();
+    }
     @Transactional
     public void complete(UUID taskId, CourseContext context, String objectKey) {
         if (checkpoints.findByTask_IdAndStage(taskId, TaskStage.CONTENT_EXTRACTED).isPresent()) return;

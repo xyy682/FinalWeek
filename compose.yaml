@@ -136,6 +136,11 @@ services:
       BM25_TOP_K: ${BM25_TOP_K:-20}
       FINAL_TOP_K: ${FINAL_TOP_K:-8}
       RRF_K: ${RRF_K:-60}
+      CHUNK_MAX_TOKENS: ${CHUNK_MAX_TOKENS:-512}
+      CHUNK_OVERLAP_TOKENS: ${CHUNK_OVERLAP_TOKENS:-64}
+      EMBEDDING_BATCH_SIZE: ${EMBEDDING_BATCH_SIZE:-10}
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-1024}
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-finalweek_segments}
       PLAN_REQUEST_TIMEOUT_SECONDS: ${PLAN_REQUEST_TIMEOUT_SECONDS:-60}
       CHAT_REQUEST_TIMEOUT_SECONDS: ${CHAT_REQUEST_TIMEOUT_SECONDS:-60}
       CHAT_HISTORY_LIMIT: ${CHAT_HISTORY_LIMIT:-20}
@@ -148,6 +153,8 @@ services:
       BAILIAN_MAX_ATTEMPTS: ${BAILIAN_MAX_ATTEMPTS:-3}
     ports:
       - "8080:8080"
+    volumes:
+      - lucene-data:/data/lucene
     depends_on:
       mysql:
         condition: service_healthy
@@ -188,3 +195,4 @@ volumes:
   rabbitmq-data:
   minio-data:
   qdrant-data:
+  lucene-data:

@@ -9,7 +9,8 @@ RUN --mount=type=cache,target=/root/.m2 mvn -B -ntp -s .mvn/settings.xml package
 FROM eclipse-temurin:21.0.8_9-jre-jammy
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     ffmpeg libreoffice-impress fonts-noto-cjk && rm -rf /var/lib/apt/lists/*
-RUN useradd --system --uid 10001 --create-home finalweek
+RUN useradd --system --uid 10001 --create-home finalweek && \
+    mkdir -p /data/lucene && chown -R finalweek:finalweek /data/lucene
 WORKDIR /app
 COPY --from=build /workspace/target/finalweek-backend-*.jar app.jar
 USER finalweek

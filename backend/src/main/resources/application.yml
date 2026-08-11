@@ -106,6 +106,13 @@ finalweek:
     bm25-top-k: ${BM25_TOP_K:20}
     final-top-k: ${FINAL_TOP_K:8}
     rrf-k: ${RRF_K:60}
+    chunk-max-tokens: ${CHUNK_MAX_TOKENS:512}
+    chunk-overlap-tokens: ${CHUNK_OVERLAP_TOKENS:64}
+    embedding-batch-size: ${EMBEDDING_BATCH_SIZE:10}
+    embedding-dimensions: ${EMBEDDING_DIMENSIONS:1024}
+    qdrant-endpoint: ${QDRANT_ENDPOINT:http://localhost:6333}
+    qdrant-collection: ${QDRANT_COLLECTION:finalweek_segments}
+    lucene-index-path: ${LUCENE_INDEX_PATH:./data/lucene}
   ai:
     endpoint: ${BAILIAN_ENDPOINT:https://dashscope.aliyuncs.com}
     api-key: ${BAILIAN_API_KEY:}
@@ -136,3 +143,6 @@ finalweek:
   storage:
     endpoint: http://minio:9000
     public-endpoint: ${MINIO_PUBLIC_ENDPOINT:http://localhost:9000}
+  retrieval:
+    qdrant-endpoint: http://qdrant:6333
+    lucene-index-path: /data/lucene

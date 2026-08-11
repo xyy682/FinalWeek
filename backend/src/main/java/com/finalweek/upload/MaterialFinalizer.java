@@ -5,6 +5,9 @@ import com.finalweek.material.Material;
 import com.finalweek.material.MaterialRepository;
 import com.finalweek.task.ParseTask;
 import com.finalweek.task.ParseTaskRepository;
+import com.finalweek.task.TaskCheckpoint;
+import com.finalweek.task.TaskCheckpointRepository;
+import com.finalweek.task.TaskStage;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -15,12 +18,14 @@ public class MaterialFinalizer {
     private final MaterialRepository materials;
     private final UploadCompletionRepository completions;
     private final ParseTaskRepository tasks;
+    private final TaskCheckpointRepository checkpoints;
 
     public MaterialFinalizer(MaterialRepository materials, UploadCompletionRepository completions,
-                             ParseTaskRepository tasks) {
+                             ParseTaskRepository tasks, TaskCheckpointRepository checkpoints) {
         this.materials = materials;
         this.completions = completions;
         this.tasks = tasks;
+        this.checkpoints = checkpoints;
     }
 
     @Transactional(readOnly = true)
@@ -51,6 +56,7 @@ public class MaterialFinalizer {
         materials.flush();
         var task = tasks.save(new ParseTask(metadata.userId(), metadata.courseId(), material));
         tasks.flush();
+        checkpoints.save(new TaskCheckpoint(task, TaskStage.UPLOADED, objectKey, null));
         return new FinalizedMaterial(material, task);
     }
 

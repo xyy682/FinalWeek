@@ -2,6 +2,7 @@ package com.finalweek.material;
 
 import com.finalweek.common.api.BusinessException;
 import com.finalweek.course.CourseService;
+import com.finalweek.knowledge.KnowledgeCleanupService;
 import com.finalweek.upload.ObjectStorage;
 import java.util.List;
 import java.util.UUID;
@@ -22,14 +23,17 @@ public class MaterialService {
     private final ObjectStorage storage;
     private final ParseTaskRepository tasks;
     private final CourseSegmentRepository segments;
+    private final KnowledgeCleanupService knowledge;
 
     public MaterialService(MaterialRepository repository, CourseService courseService, ObjectStorage storage,
-                           ParseTaskRepository tasks, CourseSegmentRepository segments) {
+                           ParseTaskRepository tasks, CourseSegmentRepository segments,
+                           KnowledgeCleanupService knowledge) {
         this.repository = repository;
         this.courseService = courseService;
         this.storage = storage;
         this.tasks = tasks;
         this.segments = segments;
+        this.knowledge = knowledge;
     }
 
     @Transactional(readOnly = true)
@@ -61,6 +65,7 @@ public class MaterialService {
                 material.markDeleted();
                 repository.save(material);
                 var objectKey = material.getObjectKey();
+                var courseId = material.getCourseId();
                 TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                     @Override public void afterCommit() {
                         try { storage.delete(objectKey); }
@@ -72,6 +77,7 @@ public class MaterialService {
                         catch (RuntimeException exception) {
                             log.warn("Derived object cleanup needs reconciliation materialId={}", materialId, exception);
                         }
+                        knowledge.deleteMaterial(courseId, materialId);
                     }
                 });
             }
