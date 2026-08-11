@@ -12,6 +12,10 @@ import com.finalweek.task.ParseTaskRepository;
 import com.finalweek.task.TaskStatus;
 import com.finalweek.material.MaterialRepository;
 import com.finalweek.material.MaterialStatus;
+import com.finalweek.material.CourseSegmentRepository;
+import com.finalweek.upload.ObjectStorage;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 public class CourseService {
@@ -21,15 +25,19 @@ public class CourseService {
     private final FinalWeekProperties properties;
     private final ParseTaskRepository tasks;
     private final MaterialRepository materials;
+    private final CourseSegmentRepository segments;
+    private final ObjectStorage storage;
 
     public CourseService(
             CourseRepository courseRepository,
             UserAccountRepository userAccountRepository,
-            FinalWeekProperties properties, ParseTaskRepository tasks, MaterialRepository materials) {
+            FinalWeekProperties properties, ParseTaskRepository tasks, MaterialRepository materials,
+            CourseSegmentRepository segments, ObjectStorage storage) {
         this.courseRepository = courseRepository;
         this.userAccountRepository = userAccountRepository;
         this.properties = properties;
         this.tasks = tasks; this.materials = materials;
+        this.segments = segments; this.storage = storage;
     }
 
     @Transactional(readOnly = true)
@@ -72,8 +80,22 @@ public class CourseService {
                 materials.updateStatus(task.getMaterialId(), MaterialStatus.CANCELLED);
             }
         });
+        var courseMaterials = materials.findAllByCourse_IdAndDeletedFalse(courseId);
+        courseMaterials.forEach(material -> {
+            segments.deleteAllByMaterial_Id(material.getId());
+            material.markDeleted();
+        });
+        materials.saveAll(courseMaterials);
         course.markDeleted();
         courseRepository.save(course);
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override public void afterCommit() {
+                courseMaterials.forEach(material -> {
+                    try { storage.delete(material.getObjectKey()); } catch (RuntimeException ignored) {}
+                    try { storage.deletePrefix("derived/" + material.getId() + "/"); } catch (RuntimeException ignored) {}
+                });
+            }
+        });
     }
 
     private String normalize(String name) {

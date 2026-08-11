@@ -21,13 +21,15 @@ public class MaterialService {
     private final CourseService courseService;
     private final ObjectStorage storage;
     private final ParseTaskRepository tasks;
+    private final CourseSegmentRepository segments;
 
     public MaterialService(MaterialRepository repository, CourseService courseService, ObjectStorage storage,
-                           ParseTaskRepository tasks) {
+                           ParseTaskRepository tasks, CourseSegmentRepository segments) {
         this.repository = repository;
         this.courseService = courseService;
         this.storage = storage;
         this.tasks = tasks;
+        this.segments = segments;
     }
 
     @Transactional(readOnly = true)
@@ -55,6 +57,7 @@ public class MaterialService {
                 if (!task.getStatus().terminal() && tasks.cancelUnstarted(task.getId()) != 1) {
                     throw new BusinessException(HttpStatus.CONFLICT, "TASK_NOT_CANCELLABLE", "任务已开始，无法删除资料");
                 }
+                segments.deleteAllByMaterial_Id(materialId);
                 material.markDeleted();
                 repository.save(material);
                 var objectKey = material.getObjectKey();
@@ -64,6 +67,10 @@ public class MaterialService {
                         catch (RuntimeException exception) {
                             log.warn("Material row deleted but object cleanup needs reconciliation materialId={}",
                                     materialId, exception);
+                        }
+                        try { storage.deletePrefix("derived/" + materialId + "/"); }
+                        catch (RuntimeException exception) {
+                            log.warn("Derived object cleanup needs reconciliation materialId={}", materialId, exception);
                         }
                     }
                 });

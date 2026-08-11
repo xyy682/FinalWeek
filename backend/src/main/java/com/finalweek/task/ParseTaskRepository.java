@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 public interface ParseTaskRepository extends JpaRepository<ParseTask, UUID> {
     Optional<ParseTask> findByIdAndUserId(UUID id, UUID userId);
@@ -80,6 +81,17 @@ public interface ParseTaskRepository extends JpaRepository<ParseTask, UUID> {
             "task.startedAt = null, task.finishedAt = null, task.updatedAt = CURRENT_TIMESTAMP " +
             "where task.id = :id and task.status = 'FAILED'")
     int prepareManualRetry(@Param("id") UUID id);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Transactional
+    @Query("update ParseTask task set task.apiAttemptCount = task.apiAttemptCount + 1, " +
+            "task.updatedAt = CURRENT_TIMESTAMP where task.id = :id and task.status = 'PROCESSING'")
+    int incrementApiAttempt(@Param("id") UUID id);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update ParseTask task set task.currentStage = :stage, task.updatedAt = CURRENT_TIMESTAMP " +
+            "where task.id = :id and task.status = 'PROCESSING'")
+    int advanceStage(@Param("id") UUID id, @Param("stage") TaskStage stage);
 
     List<ParseTask> findTop100ByStatusAndUpdatedAtBeforeOrderByUpdatedAtAsc(TaskStatus status, Instant before);
 }

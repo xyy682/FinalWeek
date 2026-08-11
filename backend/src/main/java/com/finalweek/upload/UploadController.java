@@ -55,6 +55,7 @@ public class UploadController {
     }
 
     @PostMapping("/uploads/{uploadId}/complete")
+    @ResponseStatus(HttpStatus.ACCEPTED)
     CompleteResponse complete(@AuthenticationPrincipal FinalWeekPrincipal principal, @PathVariable UUID uploadId) {
         var result = service.complete(principal.userId(), uploadId);
         return new CompleteResponse(MaterialResponse.from(result.material(), result.task().getId()),

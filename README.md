@@ -1,6 +1,6 @@
 # FinalWeek
 
-FinalWeek 是面向大学生期末复习的课程资料理解工具。项目按 [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) 串行开发；当前仓库已完成 Phase 1–4（项目基线、登录与课程、分片上传、RabbitMQ 任务引擎与 SSE），其余业务能力会在后续阶段逐项交付，不把尚未实现的功能描述成可用能力。
+FinalWeek 是面向大学生期末复习的课程资料理解工具。项目按 [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) 串行开发；当前仓库已完成 Phase 1–5（项目基线、登录与课程、分片上传、RabbitMQ 任务引擎与 SSE、五类资料内容提取），其余业务能力会在后续阶段逐项交付，不把尚未实现的功能描述成可用能力。
 
 ## 当前可运行内容
 
@@ -8,7 +8,11 @@ FinalWeek 是面向大学生期末复习的课程资料理解工具。项目按 
 - Java 21 + Spring Boot 3.5 单体，已实现 Mailpit 邮箱验证码、Redis TTL/限流、Spring Session、CSRF、课程 CRUD/逻辑删除、8 门上限和 ownership 隔离。
 - Redis 故障门禁覆盖登录、全部认证接口和未来 AI API 路径，统一返回 `503 SERVICE_REDIS_UNAVAILABLE`；静态落地页及公开 ping 仍可访问。
 - 分片上传使用 Redis 元数据/完成分片集合/完成标记、MinIO 确定性临时对象、Redisson complete 锁和 MySQL 唯一约束；支持断点差集续传、完整 SHA-256、格式/大小校验、同课程去重与过期临时分片清理。
-- 上传完成会在同一数据库事务创建资料与 `PENDING_PUBLISH` 解析任务；RabbitMQ 使用 durable 队列、publisher confirm、manual ack、每轮三次投递预算和 DLQ，Redis/SSE 推送进度，MySQL REST 状态负责断线恢复。当前解析流水线尚未进入 Phase 5，任务会以明确的 `PIPELINE_NOT_READY` 失败，而不会伪装为解析成功。
+- 上传完成会在同一数据库事务创建资料与 `PENDING_PUBLISH` 解析任务；RabbitMQ 使用 durable 队列、publisher confirm、manual ack、每轮三次投递预算和 DLQ，Redis/SSE 推送进度，MySQL REST 状态负责断线恢复。
+- PDF 使用 PDFBox 按页提取并对低文字密度页 OCR；PPTX 使用 POI 按幻灯片提取、LibreOffice 生成确定性 PDF 预览，必要时逐页 OCR；TXT/MD 保留段落号。
+- MP3/MP4 使用 FFmpeg/ffprobe 校验时长和切分音轨，`paraformer-realtime-v2` 以本地 WAV 字节流识别并保存句级时间戳；MP4 按场景和最长间隔抽帧、感知哈希去重、OCR，并按时间线合并 ASR/OCR。单路失败时保留另一条有效内容并记录警告。
+- `CourseSegment` 保存页码、幻灯片号、段落号或起止毫秒；`CONTENT_EXTRACTED` checkpoint 与确定性派生对象防止重复消费重复调用模型。Phase 6 索引尚未实现，因此提取完成后的任务会明确以 `NEXT_STAGE_NOT_READY` 结束，不会把未建索引的资料标成成功。
+- PDF/PPTX 预览统一为短时授权 PDF URL；TXT/MD/MP3/MP4 使用原文件短时 URL，MinIO 支持浏览器 Range 请求。来源片段接口同时校验用户、课程和资料归属。
 - 单个 Compose 项目启动前端、后端、MySQL、Redis、RabbitMQ、MinIO、Qdrant 和 Mailpit；Web API 与未来的 MQ consumer 保持同一后端进程。
 - JUnit、Testcontainers、Vitest 和 Playwright 测试基础。
 
@@ -84,7 +88,9 @@ corepack pnpm@10.18.3 test
 corepack pnpm@10.18.3 build
 ```
 
-自动化测试覆盖登录、权限、Redis 门禁、分片写入顺序、缺片、顺序合并、哈希、重复资料、过期清理、任务投递失败补偿、旧执行轮次去重和前端 30%/70%/99% 差集计算；完整 Playwright 主流程会在 Phase 11 随业务闭环一起验收。目前没有 AI Golden Case 实测结果、性能数字或生产 SLA 声明。
+当前 Docker 构建实际执行后端 31 项 JUnit 与前端 5 项 Vitest，并完成类型检查和生产构建。自动化测试覆盖登录、权限、Redis 门禁、分片写入顺序、缺片、顺序合并、哈希、重复资料、过期清理、任务投递失败补偿、旧执行轮次去重、原生/扫描 PDF、文本分段、音视频双路合并和前端 30%/70%/99% 差集计算。
+
+Phase 5 真实验证使用五种格式逐一走完登录、建课、分片上传、RabbitMQ 消费和来源读取：PDF/PPTX/TXT 生成正确页/幻灯片/段落位置，MP3 生成句级时间戳，MP4 以一次 ASR 和一次 OCR 合并音轨与画面文字；五种预览均验证 Range `206`，来源接口验证所属用户 `200`、其他用户 `404`、匿名 `401`。完整 Playwright 主流程会在 Phase 11 随业务闭环一起验收。目前没有 AI Golden Case 评测结果、性能数字或生产 SLA 声明。
 
 ## 配置与密钥
 

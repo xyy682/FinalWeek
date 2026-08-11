@@ -42,11 +42,13 @@ public class MaterialController {
 
     public record MaterialResponse(UUID id, UUID courseId, UUID taskId, String originalFilename, long sizeBytes,
                                    String mediaType, MaterialType materialType, String focusNotes,
-                                   MaterialStatus status, String contentHash, Instant createdAt, Instant updatedAt) {
+                                   MaterialStatus status, String contentHash, Long durationMs, String parseWarning,
+                                   Instant createdAt, Instant updatedAt) {
         public static MaterialResponse from(Material material, UUID taskId) {
             return new MaterialResponse(material.getId(), material.getCourseId(), taskId, material.getOriginalFilename(),
                     material.getSizeBytes(), material.getMediaType(), material.getMaterialType(),
                     material.getFocusNotes(), material.getStatus(), material.getContentHash(),
+                    material.getDurationMs(), material.getParseWarning(),
                     material.getCreatedAt(), material.getUpdatedAt());
         }
         public static MaterialResponse from(Material material) { return from(material, null); }

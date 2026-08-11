@@ -58,7 +58,8 @@ class UploadServiceTest {
         when(redisson.getLock(anyString())).thenReturn(lock);
         when(lock.isHeldByCurrentThread()).thenReturn(true);
         service = new UploadService(states, storage,
-                new StorageProperties("http://localhost", "key", "secret", "bucket", DataSize.ofBytes(5), Duration.ofMinutes(15)),
+                new StorageProperties("http://localhost", "http://localhost", "key", "secret", "bucket", "us-east-1",
+                        DataSize.ofBytes(5), Duration.ofMinutes(15), Duration.ofMinutes(10)),
                 properties(), policy, courses, materials, finalizer, redisson, dispatcher);
         userId = UUID.randomUUID(); courseId = UUID.randomUUID(); uploadId = UUID.randomUUID();
     }
@@ -151,6 +152,6 @@ class UploadServiceTest {
                 new FinalWeekProperties.Auth(Duration.ofMinutes(10), Duration.ofMinutes(1), Duration.ofMinutes(10), 5, 5),
                 new FinalWeekProperties.Limits(8, Duration.ofHours(24), 100, 2048, Duration.ofHours(2), 5, 30, 5, 20),
                 new FinalWeekProperties.Retrieval(20, 20, 8, 60),
-                new FinalWeekProperties.Ai(Duration.ofSeconds(60), Duration.ofSeconds(60), 20, "asr", "ocr", "embedding", "llm"));
+                new FinalWeekProperties.Ai("https://example.com", "", 3, Duration.ofSeconds(60), Duration.ofSeconds(60), 20, "asr", "ocr", "embedding", "llm"));
     }
 }

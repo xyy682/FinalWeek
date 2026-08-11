@@ -27,6 +27,9 @@ public record FinalWeekProperties(
     public record Retrieval(int vectorTopK, int bm25TopK, int finalTopK, int rrfK) {}
 
     public record Ai(
+            String endpoint,
+            String apiKey,
+            int maxAttempts,
             Duration planRequestTimeout,
             Duration chatRequestTimeout,
             int chatHistoryLimit,

@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/api/http'
-import { completeUpload, deleteMaterial, getUploadStatus, initializeUpload, listMaterials, putChunk, type Material, type MaterialStatus, type MaterialType, type UploadSession } from '@/api/materials'
+import { completeUpload, deleteMaterial, getMaterialPreview, getUploadStatus, initializeUpload, listMaterials, putChunk, type Material, type MaterialStatus, type MaterialType, type UploadSession } from '@/api/materials'
 import { missingChunkIndexes } from '@/upload/resume'
 import { cancelTask, republishTask, retryMaterial, type TaskEvent } from '@/api/tasks'
 
@@ -122,6 +122,13 @@ async function remove(material: Material) {
   } catch (error) { if (error !== 'cancel' && error !== 'close') ElMessage.error(describe(error)) }
 }
 
+async function openPreview(material: Material) {
+  try {
+    const preview = await getMaterialPreview(material.id)
+    window.open(preview.url, '_blank', 'noopener,noreferrer')
+  } catch (error) { ElMessage.error(describe(error)) }
+}
+
 async function taskAction(material: Material, action: 'cancel' | 'republish' | 'retry') {
   if (!material.taskId) return
   try {
@@ -175,13 +182,14 @@ onBeforeUnmount(() => progressEvents?.close())
       <el-table-column label="大小" width="110"><template #default="scope">{{ formatSize(scope.row.sizeBytes) }}</template></el-table-column>
       <el-table-column label="状态" width="190"><template #default="scope"><span class="status">{{ statusLabels[scope.row.status as MaterialStatus] }}</span><small v-if="scope.row.taskId && taskEvents[scope.row.taskId]">阶段 {{ taskEvents[scope.row.taskId]?.stage }} · {{ taskEvents[scope.row.taskId]?.progress }}%<template v-if="taskEvents[scope.row.taskId]?.message"> · {{ taskEvents[scope.row.taskId]?.message }}</template></small></template></el-table-column>
       <el-table-column label="操作" width="240"><template #default="scope">
+        <el-button link type="primary" @click="openPreview(scope.row)">预览</el-button>
         <el-button v-if="scope.row.status === 'PUBLISH_FAILED'" link type="primary" @click="taskAction(scope.row, 'republish')">重新投递</el-button>
         <el-button v-if="scope.row.status === 'FAILED'" link type="primary" @click="taskAction(scope.row, 'retry')">重试</el-button>
         <el-button v-if="['PENDING_PUBLISH','QUEUED'].includes(scope.row.status)" link @click="taskAction(scope.row, 'cancel')">取消任务</el-button>
         <el-button v-if="deletable.has(scope.row.status)" link type="danger" @click="remove(scope.row)">删除</el-button>
       </template></el-table-column>
     </el-table>
-    <div class="mobile-list"><article v-for="material in materials" :key="material.id"><strong>{{ material.originalFilename }}</strong><span>{{ formatSize(material.sizeBytes) }} · {{ statusLabels[material.status] }}</span><div><el-button v-if="material.status === 'PUBLISH_FAILED'" link type="primary" @click="taskAction(material, 'republish')">重新投递</el-button><el-button v-if="material.status === 'FAILED'" link type="primary" @click="taskAction(material, 'retry')">重试</el-button><el-button v-if="['PENDING_PUBLISH','QUEUED'].includes(material.status)" link @click="taskAction(material, 'cancel')">取消任务</el-button><el-button v-if="deletable.has(material.status)" link type="danger" @click="remove(material)">删除</el-button></div></article></div>
+    <div class="mobile-list"><article v-for="material in materials" :key="material.id"><strong>{{ material.originalFilename }}</strong><span>{{ formatSize(material.sizeBytes) }} · {{ statusLabels[material.status] }}</span><div><el-button link type="primary" @click="openPreview(material)">预览</el-button><el-button v-if="material.status === 'PUBLISH_FAILED'" link type="primary" @click="taskAction(material, 'republish')">重新投递</el-button><el-button v-if="material.status === 'FAILED'" link type="primary" @click="taskAction(material, 'retry')">重试</el-button><el-button v-if="['PENDING_PUBLISH','QUEUED'].includes(material.status)" link @click="taskAction(material, 'cancel')">取消任务</el-button><el-button v-if="deletable.has(material.status)" link type="danger" @click="remove(material)">删除</el-button></div></article></div>
   </section>
 </template>
 

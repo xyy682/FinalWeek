@@ -7,6 +7,8 @@ import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
+import io.minio.GetPresignedObjectUrlArgs;
+import io.minio.Http;
 import jakarta.annotation.PostConstruct;
 import java.io.IOException;
 import java.io.InputStream;
@@ -60,6 +62,20 @@ public class MinioObjectStorage implements ObjectStorage {
             return client.getObject(GetObjectArgs.builder().bucket(properties.bucket()).object(objectKey).build());
         } catch (Exception exception) {
             throw new StorageOperationException("MinIO 读取失败", exception);
+        }
+    }
+
+    @Override
+    public String presignedGet(String objectKey, java.time.Duration ttl) {
+        try {
+            var publicClient = MinioClient.builder().endpoint(properties.publicEndpoint())
+                    .credentials(properties.accessKey(), properties.secretKey())
+                    .region(properties.region()).build();
+            return publicClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
+                    .method(Http.Method.GET).bucket(properties.bucket()).object(objectKey)
+                    .expiry(Math.toIntExact(ttl.toSeconds())).build());
+        } catch (Exception exception) {
+            throw new StorageOperationException("MinIO 预签名失败", exception);
         }
     }
 

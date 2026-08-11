@@ -14,6 +14,8 @@ export interface Material {
   focusNotes: string | null
   status: MaterialStatus
   contentHash: string
+  durationMs: number | null
+  parseWarning: string | null
   createdAt: string
   updatedAt: string
 }
@@ -47,3 +49,5 @@ export const putChunk = (uploadId: string, chunkIndex: number, data: Blob) =>
 export const completeUpload = (uploadId: string) =>
   apiFetch<{ material: Material; taskId: string; duplicate: boolean }>(`/uploads/${uploadId}/complete`, { method: 'POST' })
 export const deleteMaterial = (materialId: string) => apiFetch<void>(`/materials/${materialId}`, { method: 'DELETE' })
+export interface MaterialPreview { url: string; mediaType: string; expiresAt: string; normalizedPdf: boolean; supportsTimeSeek: boolean }
+export const getMaterialPreview = (materialId: string) => apiFetch<MaterialPreview>(`/materials/${materialId}/preview`)

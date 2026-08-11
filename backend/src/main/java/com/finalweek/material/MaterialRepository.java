@@ -12,6 +12,7 @@ import org.springframework.data.repository.query.Param;
 
 public interface MaterialRepository extends JpaRepository<Material, UUID> {
     List<Material> findAllByCourse_IdAndCourse_User_IdAndDeletedFalseOrderByCreatedAtDesc(UUID courseId, UUID userId);
+    List<Material> findAllByCourse_IdAndDeletedFalse(UUID courseId);
     Optional<Material> findByIdAndCourse_User_IdAndDeletedFalse(UUID id, UUID userId);
     Optional<Material> findByCourse_IdAndContentHashAndDeletedFalse(UUID courseId, String contentHash);
     long countByCourse_IdAndDeletedFalse(UUID courseId);

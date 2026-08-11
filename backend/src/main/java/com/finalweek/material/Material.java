@@ -33,6 +33,7 @@ public class Material {
 
     @Column(name = "object_key", nullable = false, length = 512)
     private String objectKey;
+    @Column(name = "preview_object_key", length = 512) private String previewObjectKey;
 
     @Column(name = "content_hash", length = 64)
     @JdbcTypeCode(SqlTypes.CHAR)
@@ -40,6 +41,7 @@ public class Material {
 
     @Column(name = "size_bytes", nullable = false)
     private long sizeBytes;
+    @Column(name = "duration_ms") private Long durationMs;
 
     @Column(name = "media_type", nullable = false, length = 100)
     private String mediaType;
@@ -54,6 +56,7 @@ public class Material {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private MaterialStatus status;
+    @Column(name = "parse_warning", length = 1000) private String parseWarning;
 
     @Column(nullable = false)
     private boolean deleted;
@@ -87,16 +90,22 @@ public class Material {
     void updated() { updatedAt = Instant.now(); }
 
     public void markDeleted() { deleted = true; contentHash = null; }
+    public void extracted(String previewObjectKey, Long durationMs, String warning) {
+        this.previewObjectKey = previewObjectKey; this.durationMs = durationMs; this.parseWarning = warning;
+    }
     public UUID getId() { return id; }
     public UUID getCourseId() { return course.getId(); }
     public String getOriginalFilename() { return originalFilename; }
     public String getObjectKey() { return objectKey; }
+    public String getPreviewObjectKey() { return previewObjectKey; }
     public String getContentHash() { return contentHash; }
     public long getSizeBytes() { return sizeBytes; }
+    public Long getDurationMs() { return durationMs; }
     public String getMediaType() { return mediaType; }
     public MaterialType getMaterialType() { return materialType; }
     public String getFocusNotes() { return focusNotes; }
     public MaterialStatus getStatus() { return status; }
+    public String getParseWarning() { return parseWarning; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
 }

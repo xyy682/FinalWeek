@@ -19,4 +19,7 @@ public class TaskCheckpoint {
         this.task = task; this.stage = stage; this.resultObjectKey = objectKey; this.resultJson = resultJson;
         this.status = CheckpointStatus.COMPLETED; this.completedAt = Instant.now();
     }
+    public TaskStage getStage() { return stage; }
+    public String getResultObjectKey() { return resultObjectKey; }
+    public String getResultJson() { return resultJson; }
 }
