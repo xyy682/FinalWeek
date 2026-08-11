@@ -13,6 +13,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -20,9 +21,13 @@ public class BailianLlmClient implements LlmClient {
     private final FinalWeekProperties properties;
     private final ParseTaskRepository tasks;
     private final ObjectMapper mapper;
-    private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build();
+    private final HttpClient http;
+    @Autowired
     public BailianLlmClient(FinalWeekProperties properties, ParseTaskRepository tasks, ObjectMapper mapper) {
-        this.properties = properties; this.tasks = tasks; this.mapper = mapper;
+        this(properties, tasks, mapper, HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build());
+    }
+    BailianLlmClient(FinalWeekProperties properties, ParseTaskRepository tasks, ObjectMapper mapper, HttpClient http) {
+        this.properties = properties; this.tasks = tasks; this.mapper = mapper; this.http = http;
     }
 
     @Override public String generateJson(UUID taskId, String systemPrompt, String userPrompt) {

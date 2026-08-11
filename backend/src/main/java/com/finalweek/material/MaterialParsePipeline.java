@@ -14,9 +14,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class MaterialParsePipeline implements TaskPipeline {
+    private static final Logger log = LoggerFactory.getLogger(MaterialParsePipeline.class);
     private final MaterialRepository materials;
     private final List<MaterialParser> parsers;
     private final ObjectStorage storage;
@@ -36,18 +39,27 @@ public class MaterialParsePipeline implements TaskPipeline {
     }
     @Override public com.finalweek.task.TaskType type() { return com.finalweek.task.TaskType.PARSE_MATERIAL; }
     @Override public void execute(ParseTask task) {
-        if (!checkpoints.completed(task.getId())) extract(task);
+        boolean extractionDone = checkpoints.completed(task.getId());
+        timed(task, "CONTENT_EXTRACTED", extractionDone, () -> { if (!extractionDone) extract(task); });
         var context = loadContext(task);
-        if (!knowledgeCheckpoints.completed(task.getId(), com.finalweek.task.TaskStage.CHUNKED)) {
+        boolean chunkingDone = knowledgeCheckpoints.completed(task.getId(), com.finalweek.task.TaskStage.CHUNKED);
+        timed(task, "CHUNKED", chunkingDone, () -> { if (!chunkingDone) {
             var chunks = chunker.chunk(context);
             if (chunks.isEmpty()) throw new PermanentTaskException("CONTENT_EMPTY", "资料没有可建立索引的正文");
             knowledgeCheckpoints.chunked(task.getId(), context, chunks);
-        }
-        if (!knowledgeCheckpoints.completed(task.getId(), com.finalweek.task.TaskStage.EMBEDDING_COMPLETED)) {
+        }});
+        boolean indexingDone = knowledgeCheckpoints.completed(task.getId(), com.finalweek.task.TaskStage.EMBEDDING_COMPLETED);
+        timed(task, "EMBEDDING_COMPLETED", indexingDone, () -> { if (!indexingDone) {
             var chunkedSegments = segments.findAllByMaterial_IdOrderByChunkNo(task.getMaterialId());
             indexer.index(task, chunkedSegments);
             knowledgeCheckpoints.embeddingCompleted(task.getId(), chunkedSegments.size());
-        }
+        }});
+    }
+
+    private void timed(ParseTask task, String stage, boolean skipped, Runnable action) {
+        long started = System.nanoTime(); action.run();
+        log.info("Parse stage observed taskId={} stage={} durationMs={} skippedFromCheckpoint={}", task.getId(),
+                stage, (System.nanoTime() - started) / 1_000_000, skipped);
     }
 
     private void extract(ParseTask task) {

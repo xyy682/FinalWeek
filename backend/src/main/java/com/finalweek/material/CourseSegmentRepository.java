@@ -32,4 +32,8 @@ public interface CourseSegmentRepository extends JpaRepository<CourseSegment, UU
     @Query("select distinct segment.courseId from CourseSegment segment join segment.material material " +
             "where material.status = 'SUCCEEDED' and material.deleted = false and material.course.deleted = false")
     List<UUID> findCourseIdsWithRetrievableSegments();
+
+    @Query("select segment from CourseSegment segment join segment.material material " +
+            "where material.deleted = false and material.course.deleted = false and material.status = 'SUCCEEDED'")
+    List<CourseSegment> findAllActive();
 }

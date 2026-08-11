@@ -11,6 +11,8 @@ import com.finalweek.auth.UserAccountRepository;
 import com.finalweek.common.api.BusinessException;
 import com.finalweek.common.config.FinalWeekProperties;
 import com.finalweek.task.ParseTaskRepository;
+import com.finalweek.task.ParseTask;
+import com.finalweek.task.TaskStatus;
 import com.finalweek.material.MaterialRepository;
 import com.finalweek.material.CourseSegmentRepository;
 import com.finalweek.upload.ObjectStorage;
@@ -25,6 +27,7 @@ class CourseServiceTest {
     private CourseRepository courseRepository;
     private UserAccountRepository userRepository;
     private CourseService service;
+    private ParseTaskRepository tasks;
 
     @BeforeEach
     void setUp() {
@@ -37,10 +40,25 @@ class CourseServiceTest {
                         "http://localhost:6333", "segments", java.nio.file.Path.of("build/lucene")),
                 new FinalWeekProperties.Ai("https://example.com", "", 3, Duration.ofSeconds(60), Duration.ofSeconds(60), Duration.ofSeconds(60), 20,
                         "asr", "ocr", "embedding", "llm"));
+        tasks = mock(ParseTaskRepository.class);
         service = new CourseService(courseRepository, userRepository, properties,
-                mock(ParseTaskRepository.class), mock(MaterialRepository.class),
+                tasks, mock(MaterialRepository.class),
                 mock(CourseSegmentRepository.class), mock(ObjectStorage.class),
                 mock(com.finalweek.knowledge.KnowledgeCleanupService.class));
+    }
+
+    @Test
+    void runningTaskPreventsCourseDeletionWithoutCancellingAnything() {
+        var userId = UUID.randomUUID(); var courseId = UUID.randomUUID(); var course = mock(Course.class);
+        var running = mock(ParseTask.class); when(running.getStatus()).thenReturn(TaskStatus.PROCESSING);
+        when(courseRepository.findOwnedByIdForUpdate(courseId, userId)).thenReturn(Optional.of(course));
+        when(tasks.lockAllByCourseId(courseId)).thenReturn(java.util.List.of(running));
+
+        assertThatThrownBy(() -> service.delete(userId, courseId)).isInstanceOfSatisfying(BusinessException.class,
+                exception -> assertThat(exception.code()).isEqualTo("COURSE_TASK_RUNNING"));
+
+        verify(tasks, org.mockito.Mockito.never()).cancelUnstarted(org.mockito.ArgumentMatchers.any());
+        verify(courseRepository, org.mockito.Mockito.never()).save(org.mockito.ArgumentMatchers.any());
     }
 
     @Test

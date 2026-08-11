@@ -8,9 +8,12 @@ import org.redisson.api.RedissonClient;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class TaskConsumer {
+    private static final Logger log = LoggerFactory.getLogger(TaskConsumer.class);
     private final TaskStateService states;
     private final ParseTaskRepository tasks;
     private final List<TaskPipeline> pipelines;
@@ -24,6 +27,7 @@ public class TaskConsumer {
 
     @RabbitListener(queues = "${finalweek.task.queue}")
     public void consume(TaskMessage command, Message message, Channel channel) throws IOException {
+        long consumeStarted = System.nanoTime();
         long tag = message.getMessageProperties().getDeliveryTag();
         if (!states.claim(command.taskId(), command.executionRound(), properties.maxDeliveryAttempts())) {
             channel.basicAck(tag, false); return;
@@ -62,6 +66,10 @@ public class TaskConsumer {
         } catch (RuntimeException exception) {
             retryOrFail(command, tag, channel, "TASK_INTERNAL_ERROR", exception.getMessage());
         } finally {
+            tasks.findById(command.taskId()).ifPresent(task -> log.info(
+                    "Task execution observed taskId={} status={} executionRound={} deliveryAttempts={} apiCalls={} totalDurationMs={}",
+                    task.getId(), task.getStatus(), task.getExecutionRound(), task.getDeliveryAttemptCount(),
+                    task.getApiAttemptCount(), (System.nanoTime() - consumeStarted) / 1_000_000));
             if (acquired && lock.isHeldByCurrentThread()) lock.unlock();
         }
     }

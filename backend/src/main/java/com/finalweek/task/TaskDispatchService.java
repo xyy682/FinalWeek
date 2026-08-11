@@ -57,8 +57,11 @@ public class TaskDispatchService {
     }
 
     private void send(ParseTask task) {
+        long started = System.nanoTime();
         publisher.publish(task);
         states.queued(task.getId(), task.getExecutionRound());
+        log.info("Task submitted taskId={} taskType={} executionRound={} submitDurationMs={}", task.getId(),
+                task.getTaskType(), task.getExecutionRound(), (System.nanoTime() - started) / 1_000_000);
     }
     private String code(RuntimeException exception) {
         return exception instanceof BusinessException business ? business.code() : "MQ_PUBLISH_FAILED";

@@ -10,9 +10,12 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class OutlineGenerationPipeline implements TaskPipeline {
+    private static final Logger log = LoggerFactory.getLogger(OutlineGenerationPipeline.class);
     private static final String RETRIEVAL_QUERY = "课程核心知识点 教师强调 考试重点 真题 题库 章节概念";
     private final HybridRetrievalService retrieval;
     private final MaterialRepository materials;
@@ -34,16 +37,22 @@ public class OutlineGenerationPipeline implements TaskPipeline {
     }
     @Override public TaskType type() { return TaskType.GENERATE_OUTLINE; }
     @Override public void execute(ParseTask task) {
-        if (!checkpoints.completed(task.getId(), TaskStage.CONTEXT_RETRIEVED)) {
+        boolean contextDone = checkpoints.completed(task.getId(), TaskStage.CONTEXT_RETRIEVED);
+        long contextStarted = System.nanoTime();
+        if (!contextDone) {
             var result = retrieval.retrieve(task.getUserId(), task.getCourseId(), RETRIEVAL_QUERY);
             if (result.hits().isEmpty()) throw new PermanentTaskException("OUTLINE_CONTEXT_EMPTY", "课程没有可生成提纲的内容");
             var ids = result.hits().stream().map(hit -> hit.segment().getId()).toList();
             checkpoints.contextRetrieved(task.getId(), new OutlineCheckpointService.OutlineContext(ids, prompt(task, result)));
         }
+        log.info("Outline stage observed taskId={} stage=CONTEXT_RETRIEVED durationMs={} skippedFromCheckpoint={}",
+                task.getId(), (System.nanoTime() - contextStarted) / 1_000_000, contextDone);
         var context = checkpoints.context(task.getId());
         var allowed = Set.copyOf(context.segmentIds());
         GeneratedOutline generated;
-        if (!checkpoints.completed(task.getId(), TaskStage.OUTLINE_GENERATED)) {
+        boolean generationDone = checkpoints.completed(task.getId(), TaskStage.OUTLINE_GENERATED);
+        long generationStarted = System.nanoTime();
+        if (!generationDone) {
             var raw = llm.generateJson(task.getId(), systemPrompt(), context.prompt());
             try { generated = validator.parseAndValidate(raw, allowed); }
             catch (OutlineGenerationValidator.InvalidOutlineException first) {
@@ -56,6 +65,8 @@ public class OutlineGenerationPipeline implements TaskPipeline {
             try { checkpoints.outlineGenerated(task.getId(), mapper.writeValueAsString(generated)); }
             catch (Exception exception) { throw new PermanentTaskException("OUTLINE_FORMAT_INVALID", "提纲 JSON 无法保存"); }
         } else generated = validator.parseAndValidate(checkpoints.generatedJson(task.getId()), allowed);
+        log.info("Outline stage observed taskId={} stage=OUTLINE_GENERATED durationMs={} skippedFromCheckpoint={}",
+                task.getId(), (System.nanoTime() - generationStarted) / 1_000_000, generationDone);
         publisher.publish(task, generated, allowed);
     }
 

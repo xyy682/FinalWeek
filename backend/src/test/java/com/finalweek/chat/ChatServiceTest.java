@@ -11,6 +11,7 @@ import com.finalweek.common.config.FinalWeekProperties;
 import com.finalweek.course.CourseService;
 import com.finalweek.knowledge.*;
 import com.finalweek.material.CourseSegmentRepository;
+import com.finalweek.material.CourseSegment;
 import com.finalweek.task.TaskRateLimiter;
 import java.time.Instant;
 import java.util.*;
@@ -51,6 +52,24 @@ class ChatServiceTest {
         verifyNoInteractions(fixture.llm);
     }
 
+    @Test
+    void synchronousTimeoutMarksOriginalQuestionFailedAndReturnsGatewayTimeout() {
+        var fixture = fixture(); var question = message(ChatRole.USER, ChatMessageStatus.PENDING, "课程问题");
+        when(question.getCourseId()).thenReturn(fixture.courseId);
+        when(fixture.coordinator.create(fixture.userId, fixture.courseId, "课程问题")).thenReturn(question);
+        var segment = mock(CourseSegment.class); when(segment.getId()).thenReturn(UUID.randomUUID());
+        when(segment.getContent()).thenReturn("课程证据");
+        when(fixture.retrieval.retrieve(fixture.userId, fixture.courseId, "课程问题"))
+                .thenReturn(new HybridRetrievalResult(List.of(new RetrievalHit(segment, 1, 1, 1)), false, false));
+        when(fixture.llm.generateJson(anyString(), anyString(), any())).thenThrow(
+                new com.finalweek.task.RetryableTaskException("LLM_TIMEOUT", "timeout"));
+
+        assertThatThrownBy(() -> fixture.service.ask(fixture.userId, fixture.courseId, "课程问题"))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.status()).isEqualTo(HttpStatus.GATEWAY_TIMEOUT));
+        verify(fixture.coordinator).fail(fixture.userId, question.getId(), "LLM_TIMEOUT");
+    }
+
     private ChatMessage message(ChatRole role, ChatMessageStatus status, String content) {
         var value = mock(ChatMessage.class); when(value.getId()).thenReturn(UUID.randomUUID());
         when(value.getCourseId()).thenReturn(UUID.randomUUID()); when(value.getRole()).thenReturn(role);
@@ -65,6 +84,7 @@ class ChatServiceTest {
         var validator = mock(ChatAnswerValidator.class); var llm = mock(LlmClient.class);
         var properties = mock(FinalWeekProperties.class); var ai = mock(FinalWeekProperties.Ai.class);
         when(properties.ai()).thenReturn(ai); when(ai.chatHistoryLimit()).thenReturn(20);
+        when(ai.chatRequestTimeout()).thenReturn(java.time.Duration.ofSeconds(60));
         var service = new ChatService(courses, messages, coordinator, limiter, retrieval, segments, validator,
                 llm, properties, new ObjectMapper());
         return new Fixture(service, coordinator, limiter, retrieval, llm, UUID.randomUUID(), UUID.randomUUID());

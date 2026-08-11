@@ -6,6 +6,8 @@
 
 backend/target/
 backend/.mvn/wrapper/maven-wrapper.jar
+.m2-it-cache/
+.playwright-browsers/
 
 frontend/node_modules/
 frontend/dist/
@@ -13,4 +15,3 @@ frontend/test-results/
 frontend/playwright-report/
 
 data/
-

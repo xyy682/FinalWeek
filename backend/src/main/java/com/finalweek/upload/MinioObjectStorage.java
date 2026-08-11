@@ -14,6 +14,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -98,6 +100,19 @@ public class MinioObjectStorage implements ObjectStorage {
             }
         } catch (Exception exception) {
             throw new StorageOperationException("MinIO 前缀清理失败", exception);
+        }
+    }
+
+    @Override
+    public List<String> listKeys(String prefix) {
+        try {
+            var result = new ArrayList<String>();
+            var objects = client.listObjects(ListObjectsArgs.builder().bucket(properties.bucket())
+                    .prefix(prefix).recursive(true).build());
+            for (var value : objects) result.add(value.get().objectName());
+            return List.copyOf(result);
+        } catch (Exception exception) {
+            throw new StorageOperationException("MinIO 对象清单读取失败", exception);
         }
     }
 }

@@ -71,6 +71,38 @@ public class QdrantVectorStore {
         deleteBy(Map.of("courseId", courseId.toString()));
     }
 
+    public List<VectorMetadata> listMetadata() {
+        ensureCollection();
+        var result = new ArrayList<VectorMetadata>();
+        JsonNode offset = null;
+        do {
+            var body = new java.util.LinkedHashMap<String, Object>();
+            body.put("limit", 256); body.put("with_payload", true); body.put("with_vector", false);
+            if (offset != null && !offset.isNull()) body.put("offset", mapper.convertValue(offset, Object.class));
+            var page = send("POST", "/collections/" + collection + "/points/scroll", body).path("result");
+            for (var point : page.path("points")) {
+                var payload = point.path("payload");
+                try { result.add(new VectorMetadata(UUID.fromString(point.path("id").asText()),
+                        UUID.fromString(payload.path("courseId").asText()),
+                        UUID.fromString(payload.path("materialId").asText()),
+                        UUID.fromString(payload.path("segmentId").asText()))); }
+                catch (IllegalArgumentException ignored) { }
+            }
+            offset = page.path("next_page_offset");
+        } while (!offset.isMissingNode() && !offset.isNull());
+        return List.copyOf(result);
+    }
+
+    public void deletePoints(List<UUID> pointIds) {
+        if (pointIds.isEmpty()) return;
+        ensureCollection();
+        for (int offset = 0; offset < pointIds.size(); offset += 256) {
+            var ids = pointIds.subList(offset, Math.min(offset + 256, pointIds.size())).stream()
+                    .map(UUID::toString).toList();
+            send("POST", "/collections/" + collection + "/points/delete?wait=true", Map.of("points", ids));
+        }
+    }
+
     private void deleteBy(Map<String, String> fields) {
         ensureCollection();
         send("POST", "/collections/" + collection + "/points/delete?wait=true", Map.of("filter", filter(fields)));
@@ -144,4 +176,5 @@ public class QdrantVectorStore {
     }
 
     private URI uri(String path) { return URI.create(endpoint + path); }
+    public record VectorMetadata(UUID pointId, UUID courseId, UUID materialId, UUID segmentId) {}
 }

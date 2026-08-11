@@ -51,6 +51,22 @@ class PlanServiceTest {
         verifyNoInteractions(fixture.limiter, fixture.llm);
     }
 
+    @Test
+    void synchronousTimeoutMarksRequestFailedAndReturnsGatewayTimeout() {
+        var fixture = fixture(); var requestId = UUID.randomUUID(); var nodeId = UUID.randomUUID();
+        when(fixture.coordinator.start(any(), any(), anyString(), anyString())).thenReturn(new PlanRequestCoordinator.Start(
+                requestId, false, 0, new PlanRequestCoordinator.OutlineSnapshot(UUID.randomUUID(), 1),
+                List.of(new PlanRequestCoordinator.Node(nodeId, "重点", OutlineImportance.HIGH))));
+        when(fixture.llm.generateJson(anyString(), anyString(), any())).thenThrow(
+                new com.finalweek.task.RetryableTaskException("LLM_TIMEOUT", "timeout"));
+
+        assertThatThrownBy(() -> fixture.service.generate(fixture.userId, fixture.courseId, "request-1234", fixture.input))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> { assertThat(exception.status()).isEqualTo(HttpStatus.GATEWAY_TIMEOUT);
+                            assertThat(exception.code()).isEqualTo("LLM_TIMEOUT"); });
+        verify(fixture.coordinator).fail(requestId, "LLM_TIMEOUT");
+    }
+
     private Fixture fixture() {
         var courses = mock(CourseService.class); var plans = mock(StudyPlanRepository.class);
         var tasks = mock(PlanTaskRepository.class); var coordinator = mock(PlanRequestCoordinator.class);

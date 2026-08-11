@@ -16,9 +16,10 @@ public interface CourseRepository extends JpaRepository<Course, UUID> {
     Optional<Course> findByIdAndUserIdAndDeletedFalse(UUID id, UUID userId);
 
     long countByUserIdAndDeletedFalse(UUID userId);
+    List<Course> findAllByDeletedFalse();
+    List<Course> findAllByDeletedTrue();
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select course from Course course where course.id = :id and course.user.id = :userId and course.deleted = false")
     Optional<Course> findOwnedByIdForUpdate(@Param("id") UUID id, @Param("userId") UUID userId);
 }
-

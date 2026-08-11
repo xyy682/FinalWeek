@@ -13,6 +13,8 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -26,6 +28,7 @@ import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.index.MultiBits;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanQuery;
@@ -146,6 +149,38 @@ public class LuceneCourseIndex {
                 try (var reader = DirectoryReader.open(directory)) { return reader.numDocs(); }
             }
         } catch (IOException exception) { return -1; }
+        finally { lock.unlock(); }
+    }
+
+    public Set<UUID> indexedCourseIds() {
+        try (var paths = Files.list(root)) {
+            var result = new HashSet<UUID>();
+            for (var path : paths.filter(Files::isDirectory).toList()) {
+                var name = path.getFileName().toString();
+                if (name.contains(".rebuild-") || name.contains(".backup-")) continue;
+                try { result.add(UUID.fromString(name)); } catch (IllegalArgumentException ignored) { }
+            }
+            return Set.copyOf(result);
+        } catch (IOException exception) { throw new RetryableTaskException("LUCENE_LIST_FAILED", "Lucene 目录清单读取失败"); }
+    }
+
+    public Set<UUID> segmentIds(UUID courseId) {
+        var lock = localLock(courseId).readLock(); lock.lock();
+        try {
+            var path = coursePath(courseId); if (!Files.isDirectory(path)) return Set.of();
+            try (var directory = FSDirectory.open(path)) {
+                if (!DirectoryReader.indexExists(directory)) return Set.of();
+                try (var reader = DirectoryReader.open(directory)) {
+                    var result = new HashSet<UUID>();
+                    var stored = reader.storedFields(); var liveDocs = MultiBits.getLiveDocs(reader);
+                    for (int i = 0; i < reader.maxDoc(); i++) {
+                        if (liveDocs == null || liveDocs.get(i))
+                            result.add(UUID.fromString(stored.document(i).get("segmentId")));
+                    }
+                    return Set.copyOf(result);
+                }
+            }
+        } catch (IOException exception) { throw new RetryableTaskException("LUCENE_LIST_FAILED", "Lucene 文档清单读取失败"); }
         finally { lock.unlock(); }
     }
 

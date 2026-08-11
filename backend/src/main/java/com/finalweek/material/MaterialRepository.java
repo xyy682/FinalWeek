@@ -18,6 +18,9 @@ public interface MaterialRepository extends JpaRepository<Material, UUID> {
     long countByCourse_IdAndDeletedFalse(UUID courseId);
     Optional<Material> findTopByCourse_IdAndDeletedFalseOrderByUpdatedAtDesc(UUID courseId);
 
+    @Query("select material from Material material where material.deleted = false and material.course.deleted = false")
+    List<Material> findAllActive();
+
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("update Material material set material.status = :status, material.updatedAt = CURRENT_TIMESTAMP " +
             "where material.id = :id")
