@@ -44,7 +44,7 @@ public class OutlineService {
         if (active.isPresent()) return new OutlineTaskFactory.CreatedTask(active.get(), false);
         if (segments.findAllRetrievable(userId, courseId).isEmpty()) throw new BusinessException(
                 HttpStatus.CONFLICT, "OUTLINE_REQUIRES_MATERIAL", "至少需要一份解析成功的课程资料");
-        rateLimiter.acquirePlan(userId);
+        rateLimiter.acquire(userId);
         var result = factory.create(userId, courseId);
         if (result.created()) dispatcher.dispatchAfterRateLimit(result.task());
         return result;

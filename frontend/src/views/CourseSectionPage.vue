@@ -6,6 +6,7 @@ import { getCourse, type Course } from '@/api/courses'
 import { ApiError } from '@/api/http'
 import MaterialUploadPanel from '@/components/MaterialUploadPanel.vue'
 import OutlineTree from '@/components/OutlineTree.vue'
+import StudyPlanPanel from '@/components/StudyPlanPanel.vue'
 
 const route = useRoute()
 const course = ref<Course | null>(null)
@@ -33,6 +34,7 @@ watch(() => route.params.id, load)
       </nav>
       <MaterialUploadPanel v-if="section === 'materials'" :course-id="course.id" />
       <OutlineTree v-else-if="section === 'outline'" :course-id="course.id" />
+      <StudyPlanPanel v-else-if="section === 'plan'" :course-id="course.id" />
       <section v-else class="phase-placeholder"><h2>{{ labels[section] }}</h2><p>课程框架已就绪，此区域将在后续实施阶段按计划接入完整功能。</p></section>
     </template>
   </main>

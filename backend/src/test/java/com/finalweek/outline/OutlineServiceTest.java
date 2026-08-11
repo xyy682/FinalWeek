@@ -34,7 +34,7 @@ class OutlineServiceTest {
                 .thenReturn(Optional.empty());
         when(segments.findAllRetrievable(userId, courseId)).thenReturn(List.of(mock(CourseSegment.class)));
         doThrow(new BusinessException(HttpStatus.TOO_MANY_REQUESTS, "TASK_PUBLISH_RATE_LIMITED", "limited"))
-                .when(limiter).acquirePlan(userId);
+                .when(limiter).acquire(userId);
         var service = new OutlineService(courses, segments, outlines, nodes, tasks, limiter, factory,
                 dispatcher, new ObjectMapper());
 
