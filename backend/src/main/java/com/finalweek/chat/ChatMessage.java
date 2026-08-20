@@ -1,5 +1,6 @@
 package com.finalweek.chat;
 
+import com.finalweek.task.BackgroundTask;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.UUID;
@@ -11,6 +12,8 @@ public class ChatMessage {
     @Id @UuidGenerator private UUID id;
     @Column(name = "user_id", nullable = false) private UUID userId;
     @Column(name = "course_id", nullable = false) private UUID courseId;
+    @OneToOne(fetch = FetchType.LAZY) @JoinColumn(name = "background_task_id", unique = true)
+    private BackgroundTask backgroundTask;
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 10) private ChatRole role;
     @Lob @Column(nullable = false, columnDefinition = "LONGTEXT") private String content;
     @Column(name = "source_refs_json", nullable = false, columnDefinition = "json") private String sourceRefsJson;
@@ -41,9 +44,11 @@ public class ChatMessage {
     public void succeed() { status = ChatMessageStatus.SUCCEEDED; errorCode = null; }
     public void fail(String code) { status = ChatMessageStatus.FAILED; errorCode = code; }
     public void retry() { status = ChatMessageStatus.PENDING; errorCode = null; }
+    public void attachTask(BackgroundTask task) { this.backgroundTask = task; }
     public UUID getId() { return id; }
     public UUID getUserId() { return userId; }
     public UUID getCourseId() { return courseId; }
+    public UUID getBackgroundTaskId() { return backgroundTask == null ? null : backgroundTask.getId(); }
     public ChatRole getRole() { return role; }
     public String getContent() { return content; }
     public String getSourceRefsJson() { return sourceRefsJson; }

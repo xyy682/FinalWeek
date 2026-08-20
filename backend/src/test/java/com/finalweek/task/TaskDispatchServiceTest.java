@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
 import java.util.UUID;
+import com.finalweek.mockexam.MockExamRateLimiter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -12,16 +13,19 @@ class TaskDispatchServiceTest {
     private TaskPublisher publisher;
     private TaskStateService states;
     private TaskDispatchService service;
-    private ParseTask task;
+    private BackgroundTask task;
     private UUID taskId;
     private UUID userId;
 
     @BeforeEach void setUp() {
         limiter = mock(TaskRateLimiter.class); publisher = mock(TaskPublisher.class);
-        states = mock(TaskStateService.class); service = new TaskDispatchService(limiter, publisher, states);
-        task = mock(ParseTask.class); taskId = UUID.randomUUID(); userId = UUID.randomUUID();
+        states = mock(TaskStateService.class); service = new TaskDispatchService(limiter, publisher, states,
+                mock(MockExamRateLimiter.class));
+        task = mock(BackgroundTask.class); taskId = UUID.randomUUID(); userId = UUID.randomUUID();
         when(task.getId()).thenReturn(taskId); when(task.getUserId()).thenReturn(userId);
         when(task.getExecutionRound()).thenReturn(2);
+        when(task.getTaskType()).thenReturn(TaskType.PARSE_MATERIAL);
+        when(states.owned(userId, taskId)).thenReturn(task);
     }
 
     @Test void confirmOnlyConditionallyAdvancesPendingTask() {

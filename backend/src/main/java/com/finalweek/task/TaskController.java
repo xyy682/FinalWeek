@@ -22,7 +22,7 @@ public class TaskController {
     }
     @GetMapping("/{taskId}") TaskView get(@AuthenticationPrincipal FinalWeekPrincipal principal,
                                           @PathVariable UUID taskId) {
-        return TaskView.from(states.owned(principal.userId(), taskId));
+        return states.view(principal.userId(), taskId);
     }
     @PostMapping("/{taskId}/cancel") TaskView cancel(@AuthenticationPrincipal FinalWeekPrincipal principal,
                                                      @PathVariable UUID taskId) {
@@ -31,6 +31,13 @@ public class TaskController {
     @PostMapping("/{taskId}/republish") TaskView republish(@AuthenticationPrincipal FinalWeekPrincipal principal,
                                                            @PathVariable UUID taskId) {
         return TaskView.from(dispatcher.republish(principal.userId(), taskId));
+    }
+    @PostMapping("/{taskId}/retry") TaskView retry(@AuthenticationPrincipal FinalWeekPrincipal principal,
+                                                   @PathVariable UUID taskId) {
+        return TaskView.from(dispatcher.manualRetry(principal.userId(), taskId));
+    }
+    @GetMapping("/active") java.util.List<TaskView> active(@AuthenticationPrincipal FinalWeekPrincipal principal) {
+        return states.active(principal.userId());
     }
     @GetMapping(value = "/events", produces = "text/event-stream")
     SseEmitter events(@AuthenticationPrincipal FinalWeekPrincipal principal) {

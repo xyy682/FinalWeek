@@ -1,0 +1,100 @@
+% !TEX program = tectonic
+% 未知个人信息以空白横线保留，请填写后重新编译。
+\documentclass[9.5pt,a4paper,fontset=fandol]{ctexart}
+
+\usepackage[a4paper,top=1.05cm,bottom=1.05cm,left=1.25cm,right=1.25cm]{geometry}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{tabularx}
+\usepackage{hyperref}
+\usepackage{titlesec}
+\usepackage{fontspec}
+
+\renewcommand{\familydefault}{\sfdefault}
+\setCJKmainfont[BoldFont=FandolHei-Bold.otf]{FandolHei-Regular.otf}
+
+\definecolor{accent}{HTML}{075B68}
+\definecolor{linkblue}{HTML}{075B68}
+\definecolor{tagbg}{HTML}{F0F1F2}
+\definecolor{muted}{HTML}{555555}
+
+\hypersetup{colorlinks=true,urlcolor=linkblue,linkcolor=linkblue}
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0pt}
+\linespread{1.07}
+\setlist[itemize]{leftmargin=1.45em,itemsep=1.3pt,topsep=2pt,parsep=0pt,partopsep=0pt}
+
+\newcommand{\blank}[1]{\rule{#1}{0.45pt}}
+\newcommand{\sectionbar}[1]{%
+  \vspace{3pt}%
+  {\color{accent}\bfseries\fontsize{13.5pt}{15pt}\selectfont #1}\par
+  \vspace{1.5pt}{\color{accent}\hrule height 0.8pt}\vspace{4pt}%
+}
+\newcommand{\projecttitle}[2]{%
+  \begin{tabularx}{\textwidth}{@{}Xr@{}}
+    {\bfseries\fontsize{11.5pt}{13pt}\selectfont #1} & {\bfseries\small #2}
+  \end{tabularx}\vspace{1pt}%
+}
+\newcommand{\tag}[1]{\colorbox{tagbg}{\strut\small\color{muted}#1}}
+\newcommand{\labeltext}[1]{\textbf{#1：}}
+\newcommand{\tightitem}[1]{\item #1}
+
+\begin{document}
+
+% ===== 个人信息（请填写） =====
+\begin{center}
+  {\bfseries\fontsize{21pt}{23pt}\selectfont \blank{4.2cm}}\\[-1pt]
+  \vspace{4pt}
+  \small
+  电话：\blank{2.7cm}\hspace{1.1em}
+  邮箱：\blank{4.0cm}\hspace{1.1em}
+  求职方向：\blank{3.0cm}
+\end{center}
+
+\sectionbar{教育背景}
+\begin{tabularx}{\textwidth}{@{}X X r@{}}
+  \textbf{学校：}\blank{4.4cm} & \textbf{专业：}\blank{3.8cm} & \textbf{时间：}\blank{2.6cm} \\
+  \textbf{学历：}\blank{2.8cm} & \textbf{成绩/排名：}\blank{3.1cm} &
+\end{tabularx}
+
+\sectionbar{项目经历}
+
+\projecttitle{FinalWeek - 课程资料智能理解与复习平台}{\href{https://github.com/xyy682/FinalWeek}{github.com/xyy682/FinalWeek}}
+\labeltext{技术栈}
+\tag{Spring Boot}\,\tag{MySQL}\,\tag{Redis}\,\tag{RabbitMQ}\,\tag{MinIO}\,\tag{Qdrant}\,\tag{Lucene}\,\tag{Vue 3}\,\tag{Docker}
+
+\vspace{2pt}
+\labeltext{项目简介}面向大学生期末复习场景，构建支持 PDF、PPTX、文本及音视频资料的课程理解平台；完成分片上传、异步解析、OCR/ASR、混合检索、带来源提纲、复习计划与课程问答的完整闭环。
+\begin{itemize}
+  \tightitem{设计 \textbf{PENDING\_PUBLISH + Publisher Confirm + MySQL CAS} 任务状态机，兼容消息早于确认回调、确认超时后延迟到达等竞态；区分外部 API 与 MQ 投递预算，失败任务可复用原 taskId 和 checkpoint 恢复。}
+  \tightitem{基于 \textbf{Redis + MinIO + Redisson} 实现固定分片、差集续传与并发 complete 锁，结合完整 SHA-256、确定性对象键和数据库唯一约束，保证弱网恢复及重复提交幂等。}
+  \tightitem{构建 \textbf{Qdrant 向量召回 + Lucene BM25 + RRF} 混合检索，强制 userId/courseId 隔离；使用稳定 point/document ID 幂等 upsert，并支持单路故障降级与 Lucene 全量重建。}
+  \tightitem{统一保存页码、幻灯片、段落与音视频时间戳；模型返回的片段引用需通过上下文白名单和课程归属双重校验，实现提纲、问答到原资料的可核验跳转。}
+  \tightitem{建立单元、MySQL Testcontainers、Playwright 与 8 条 Golden Case 评测：后端 \textbf{67 项测试}通过，真实模型评测覆盖率/引用正确率均为 \textbf{100\%}，同时如实保留重要度一致率 33.3\% 的薄弱项。}
+\end{itemize}
+
+\vspace{2pt}
+\projecttitle{Diet-Agent - 智能饮食推荐 Agent}{仓库地址：\blank{4.2cm}}
+\labeltext{技术栈}\blank{12.8cm}
+
+\vspace{2pt}
+\labeltext{项目简介}面向“不知道吃什么”的日常决策场景，结合实时心情、就餐场景与健康诉求等动态信息，编排多 Agent 完成意图识别、槽位澄清、标签检索重排与推荐理由生成，并建设 Trace 监控和离线评估闭环。
+\begin{itemize}
+  \tightitem{采用\textbf{编排中枢 + 专职 Worker} 分层架构，将意图理解、槽位澄清、推荐生成和质量评估拆分为独立推理单元；LLM 只负责结构化推理，会话状态与流程跃迁由编排层统一管控。}
+  \tightitem{意图 Agent 覆盖 \textbf{6 类意图、7 维槽位}，叠加意图状态矫正、低置信降级和关键词 Fallback 三层兜底；槽位抽取引入词典强约束，降低错误路由与字段幻觉。}
+  \tightitem{在关键业务节点采集输入、输出、耗时与 Token 等 Trace 事件并持久化，支持按单次对话逐步回放，为 LLM 黑盒链路提供可检索、可追踪的问题定位依据。}
+  \tightitem{设计“\textbf{后端规则 + LLM Judge + 用户反馈}”加权离线评估，覆盖意图准确率、Token 消耗、端到端耗时等 10+ 指标；低分 Trace 回流标注与优化，形成指标驱动迭代闭环。}
+  \tightitem{为各 LLM 节点设计超时、输出异常等全链路 Fallback，由后端规则与模板接管，确保任一模型异常时流程不中断、用户始终获得可解释回复。}
+  \tightitem{产品侧覆盖双数据源对话推荐与个人菜单维护，研发侧提供 Trace 排查、标注和批量评估，贯通使用、反馈、标注、评估与迭代。}
+\end{itemize}
+
+\sectionbar{专业技能}
+\begin{itemize}
+  \tightitem{具备 \textbf{Java / Spring Boot} 项目实践，能够围绕事务边界、状态机、幂等、异常分类和同步/异步接口设计完整业务链路。}
+  \tightitem{具备 \textbf{MySQL、Redis、RabbitMQ} 工程实践，涉及唯一约束与 CAS、Session/锁/限流、Publisher Confirm、Manual Ack、重投与 DLQ。}
+  \tightitem{具备 \textbf{RAG 与 Agent 工程化}实践，涉及混合检索、结构化输出、来源校验、多 Agent 编排、Trace、LLM Judge 与 Fallback。}
+  \tightitem{能够使用 \textbf{JUnit、Testcontainers、Playwright、Docker Compose、Git} 构建可复现的测试与本地交付流程。}
+\end{itemize}
+
+\end{document}

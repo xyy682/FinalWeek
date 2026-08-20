@@ -1,0 +1,1 @@
+{"coreKnowledgePoints":["二叉树遍历"],"correctSources":["90000000-0000-0000-0000-000000000001","90000000-0000-0000-0000-000000000002"],"expectedStatus":"GENERATED","expectedCounts":{"SHORT_ANSWER":2},"allowGeneralKnowledge":false,"forbiddenOriginalStems":["给定前序ABDEC和中序DBEAC画出该二叉树"]}

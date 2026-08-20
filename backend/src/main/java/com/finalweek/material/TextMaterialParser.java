@@ -1,6 +1,6 @@
 package com.finalweek.material;
 
-import com.finalweek.task.ParseTask;
+import com.finalweek.task.BackgroundTask;
 import com.finalweek.task.PermanentTaskException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class TextMaterialParser implements MaterialParser {
     @Override public boolean supports(String mediaType) { return mediaType.equals("text/plain") || mediaType.equals("text/markdown"); }
-    @Override public ExtractionResult extract(ParseTask task, Material material, Path source, Path workDirectory) {
+    @Override public ExtractionResult extract(BackgroundTask task, Material material, Path source, Path workDirectory) {
         try {
             var text = Files.readString(source, StandardCharsets.UTF_8).replace("\r\n", "\n").replace('\r', '\n');
             if (text.indexOf('\0') >= 0) throw new PermanentTaskException("TEXT_ENCODING_INVALID", "文本文件包含二进制内容");

@@ -17,13 +17,15 @@ import java.util.UUID;
 import org.hibernate.annotations.UuidGenerator;
 
 @Entity
-@Table(name = "parse_task")
-public class ParseTask {
+@Table(name = "background_task")
+public class BackgroundTask {
     @Id @UuidGenerator private UUID id;
     @Column(name = "user_id", nullable = false) private UUID userId;
     @Column(name = "course_id", nullable = false) private UUID courseId;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "material_id") private Material material;
+    @Column(name = "business_id", nullable = false) private UUID businessId;
     @Enumerated(EnumType.STRING) @Column(name = "task_type", nullable = false, length = 30) private TaskType taskType;
+    @Column(name = "visible_in_global_drawer", nullable = false) private boolean visibleInGlobalDrawer;
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 30) private TaskStatus status;
     @Enumerated(EnumType.STRING) @Column(name = "current_stage", length = 40) private TaskStage currentStage;
     @Column(name = "publish_attempt_count", nullable = false) private int publishAttemptCount;
@@ -40,18 +42,29 @@ public class ParseTask {
     @Column(name = "created_at", nullable = false) private Instant createdAt;
     @Column(name = "updated_at", nullable = false) private Instant updatedAt;
 
-    protected ParseTask() {}
-    public ParseTask(UUID userId, UUID courseId, Material material) {
+    protected BackgroundTask() {}
+    public BackgroundTask(UUID userId, UUID courseId, Material material) {
         this.userId = userId; this.courseId = courseId; this.material = material;
+        this.businessId = material.getId(); this.visibleInGlobalDrawer = true;
         this.taskType = TaskType.PARSE_MATERIAL; this.status = TaskStatus.PENDING_PUBLISH;
         this.currentStage = TaskStage.UPLOADED; this.publishAttemptCount = 1;
         this.businessKey = "PARSE_MATERIAL:" + material.getId();
     }
-    public ParseTask(UUID userId, UUID courseId, long generationVersion) {
-        this.userId = userId; this.courseId = courseId; this.generationVersion = generationVersion;
+    public BackgroundTask(UUID userId, UUID courseId, UUID knowledgeVersionId, long generationVersion) {
+        this.userId = userId; this.courseId = courseId; this.businessId = knowledgeVersionId;
+        this.generationVersion = generationVersion; this.visibleInGlobalDrawer = true;
         this.taskType = TaskType.GENERATE_OUTLINE; this.status = TaskStatus.PENDING_PUBLISH;
         this.publishAttemptCount = 1;
-        this.businessKey = "GENERATE_OUTLINE:" + courseId + ":" + generationVersion;
+        this.businessKey = "GENERATE_OUTLINE:" + knowledgeVersionId;
+    }
+    public BackgroundTask(UUID userId, UUID courseId, TaskType type, UUID businessId,
+                          boolean visibleInGlobalDrawer) {
+        if (type == TaskType.PARSE_MATERIAL || type == TaskType.GENERATE_OUTLINE)
+            throw new IllegalArgumentException("请使用该任务类型的专用构造方法");
+        this.userId = userId; this.courseId = courseId; this.businessId = businessId;
+        this.taskType = type; this.visibleInGlobalDrawer = visibleInGlobalDrawer;
+        this.status = TaskStatus.PENDING_PUBLISH; this.publishAttemptCount = 1;
+        this.businessKey = type.name() + ":" + businessId;
     }
     @PrePersist void created() { var now = Instant.now(); createdAt = now; updatedAt = now; }
     @PreUpdate void updated() { updatedAt = Instant.now(); }
@@ -59,7 +72,9 @@ public class ParseTask {
     public UUID getUserId() { return userId; }
     public UUID getCourseId() { return courseId; }
     public UUID getMaterialId() { return material == null ? null : material.getId(); }
+    public UUID getBusinessId() { return businessId; }
     public TaskType getTaskType() { return taskType; }
+    public boolean isVisibleInGlobalDrawer() { return visibleInGlobalDrawer; }
     public TaskStatus getStatus() { return status; }
     public TaskStage getCurrentStage() { return currentStage; }
     public int getPublishAttemptCount() { return publishAttemptCount; }

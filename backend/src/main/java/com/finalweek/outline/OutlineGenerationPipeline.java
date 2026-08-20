@@ -5,6 +5,7 @@ import com.finalweek.ai.LlmClient;
 import com.finalweek.knowledge.HybridRetrievalService;
 import com.finalweek.material.MaterialRepository;
 import com.finalweek.material.MaterialStatus;
+import com.finalweek.knowledgeversion.KnowledgeVersionService;
 import com.finalweek.task.*;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -25,22 +26,26 @@ public class OutlineGenerationPipeline implements TaskPipeline {
     private final LlmClient llm;
     private final ObjectMapper mapper;
     private final String schema;
+    private final KnowledgeVersionService knowledgeVersions;
     public OutlineGenerationPipeline(HybridRetrievalService retrieval, MaterialRepository materials,
                                      OutlineCheckpointService checkpoints, OutlineGenerationValidator validator,
-                                     OutlinePublisher publisher, LlmClient llm, ObjectMapper mapper) {
+                                     OutlinePublisher publisher, LlmClient llm, ObjectMapper mapper,
+                                     KnowledgeVersionService knowledgeVersions) {
         this.retrieval = retrieval; this.materials = materials; this.checkpoints = checkpoints;
         this.validator = validator; this.publisher = publisher; this.llm = llm; this.mapper = mapper;
+        this.knowledgeVersions = knowledgeVersions;
         try (InputStream input = getClass().getResourceAsStream("/outline-schema.json")) {
             if (input == null) throw new IllegalStateException("outline-schema.json missing");
             this.schema = new String(input.readAllBytes(), StandardCharsets.UTF_8);
         } catch (Exception exception) { throw new IllegalStateException("无法读取提纲 JSON Schema", exception); }
     }
     @Override public TaskType type() { return TaskType.GENERATE_OUTLINE; }
-    @Override public void execute(ParseTask task) {
+    @Override public void execute(BackgroundTask task) {
         boolean contextDone = checkpoints.completed(task.getId(), TaskStage.CONTEXT_RETRIEVED);
         long contextStarted = System.nanoTime();
         if (!contextDone) {
-            var result = retrieval.retrieve(task.getUserId(), task.getCourseId(), RETRIEVAL_QUERY);
+            var materialIds = Set.copyOf(knowledgeVersions.materialIds(task.getBusinessId()));
+            var result = retrieval.retrieve(task.getUserId(), task.getCourseId(), RETRIEVAL_QUERY, materialIds);
             if (result.hits().isEmpty()) throw new PermanentTaskException("OUTLINE_CONTEXT_EMPTY", "课程没有可生成提纲的内容");
             var ids = result.hits().stream().map(hit -> hit.segment().getId()).toList();
             checkpoints.contextRetrieved(task.getId(), new OutlineCheckpointService.OutlineContext(ids, prompt(task, result)));
@@ -75,11 +80,12 @@ public class OutlineGenerationPipeline implements TaskPipeline {
                 + "每个节点必须引用至少一个给定 segmentId。importance 只能是 HIGH、MEDIUM、LOW。"
                 + "学生重点说明、教师强调内容、真题和题库信号优先提高重要度。请严格输出 JSON，不输出 Markdown。Schema:\n" + schema;
     }
-    private String prompt(ParseTask task, com.finalweek.knowledge.HybridRetrievalResult result) {
+    private String prompt(BackgroundTask task, com.finalweek.knowledge.HybridRetrievalResult result) {
         var builder = new StringBuilder("为课程生成树状复习提纲。generationVersion=")
                 .append(task.getGenerationVersion()).append("\n课程资料信号:\n");
+        var versionMaterialIds = Set.copyOf(knowledgeVersions.materialIds(task.getBusinessId()));
         materials.findAllByCourse_IdAndDeletedFalse(task.getCourseId()).stream()
-                .filter(value -> value.getStatus() == MaterialStatus.SUCCEEDED).forEach(value -> builder
+                .filter(value -> versionMaterialIds.contains(value.getId())).forEach(value -> builder
                         .append("- 类型=").append(value.getMaterialType()).append("; 文件=")
                         .append(value.getOriginalFilename()).append("; 学生重点说明=")
                         .append(value.getFocusNotes() == null ? "无" : value.getFocusNotes()).append('\n'));

@@ -67,6 +67,10 @@ public class LuceneCourseIndex {
     }
 
     public List<UUID> search(UUID userId, UUID courseId, String query, int limit) {
+        return search(userId, courseId, Set.of(), query, limit);
+    }
+
+    public List<UUID> search(UUID userId, UUID courseId, Set<UUID> materialIds, String query, int limit) {
         var lock = localLock(courseId).readLock(); lock.lock();
         try {
             var path = coursePath(courseId);
@@ -79,11 +83,18 @@ public class LuceneCourseIndex {
                     var lexical = new BooleanQuery.Builder();
                     terms.forEach(term -> lexical.add(new TermQuery(new Term(CONTENT, term)), BooleanClause.Occur.SHOULD));
                     lexical.setMinimumNumberShouldMatch(1);
-                    var filtered = new BooleanQuery.Builder()
+                    var filteredBuilder = new BooleanQuery.Builder()
                             .add(lexical.build(), BooleanClause.Occur.MUST)
                             .add(new TermQuery(new Term("userId", userId.toString())), BooleanClause.Occur.FILTER)
-                            .add(new TermQuery(new Term("courseId", courseId.toString())), BooleanClause.Occur.FILTER)
-                            .build();
+                            .add(new TermQuery(new Term("courseId", courseId.toString())), BooleanClause.Occur.FILTER);
+                    if (!materialIds.isEmpty()) {
+                        var materialFilter = new BooleanQuery.Builder();
+                        materialIds.forEach(id -> materialFilter.add(new TermQuery(new Term("materialId", id.toString())),
+                                BooleanClause.Occur.SHOULD));
+                        materialFilter.setMinimumNumberShouldMatch(1);
+                        filteredBuilder.add(materialFilter.build(), BooleanClause.Occur.FILTER);
+                    }
+                    var filtered = filteredBuilder.build();
                     var searcher = new IndexSearcher(reader); searcher.setSimilarity(new BM25Similarity());
                     var top = searcher.search(filtered, limit); var result = new ArrayList<UUID>();
                     for (var hit : top.scoreDocs) result.add(UUID.fromString(searcher.storedFields().document(hit.doc).get("segmentId")));

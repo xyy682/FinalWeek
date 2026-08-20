@@ -24,6 +24,8 @@ public class UploadStateStore {
         try {
             redis.opsForValue().set(metaKey(metadata.uploadId()), objectMapper.writeValueAsString(metadata), ttl);
             redis.opsForZSet().add(EXPIRATIONS_KEY, metadata.uploadId().toString(), metadata.expiresAt().toEpochMilli());
+            redis.opsForSet().add(courseKey(metadata.courseId()), metadata.uploadId().toString());
+            redis.expire(courseKey(metadata.courseId()), ttl.plus(Duration.ofHours(1)));
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("上传元数据序列化失败", exception);
         }
@@ -56,10 +58,12 @@ public class UploadStateStore {
     }
 
     public void complete(UUID uploadId, UUID materialId, Duration ttl) {
+        var metadata = get(uploadId);
         redis.opsForValue().set(completedKey(uploadId), materialId.toString(), ttl);
         redis.delete(metaKey(uploadId));
         redis.delete(chunksKey(uploadId));
         redis.opsForZSet().remove(EXPIRATIONS_KEY, uploadId.toString());
+        if (metadata != null) redis.opsForSet().remove(courseKey(metadata.courseId()), uploadId.toString());
     }
 
     public List<UUID> expired(Instant now, int limit) {
@@ -69,12 +73,30 @@ public class UploadStateStore {
     }
 
     public void removeExpired(UUID uploadId) {
+        var metadata = get(uploadId);
         redis.delete(metaKey(uploadId));
         redis.delete(chunksKey(uploadId));
         redis.opsForZSet().remove(EXPIRATIONS_KEY, uploadId.toString());
+        if (metadata != null) redis.opsForSet().remove(courseKey(metadata.courseId()), uploadId.toString());
+    }
+
+    public int activeCount(UUID courseId) {
+        var key = courseKey(courseId);
+        var members = redis.opsForSet().members(key);
+        if (members == null || members.isEmpty()) return 0;
+        int count = 0;
+        for (var value : members) {
+            try {
+                var uploadId = UUID.fromString(value);
+                if (get(uploadId) == null) redis.opsForSet().remove(key, value);
+                else count++;
+            } catch (IllegalArgumentException ignored) { redis.opsForSet().remove(key, value); }
+        }
+        return count;
     }
 
     static String metaKey(UUID id) { return "fw:upload:" + id + ":meta"; }
     static String chunksKey(UUID id) { return "fw:upload:" + id + ":chunks"; }
     static String completedKey(UUID id) { return "fw:upload:" + id + ":completed"; }
+    static String courseKey(UUID id) { return "fw:upload:course:" + id; }
 }

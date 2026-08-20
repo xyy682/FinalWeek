@@ -1,7 +1,7 @@
 package com.finalweek.material;
 
 import com.finalweek.ai.OcrClient;
-import com.finalweek.task.ParseTask;
+import com.finalweek.task.BackgroundTask;
 import com.finalweek.task.PermanentTaskException;
 import com.finalweek.task.RetryableTaskException;
 import java.nio.file.Path;
@@ -19,7 +19,7 @@ public class PdfMaterialParser implements MaterialParser {
     private final OcrClient ocr;
     public PdfMaterialParser(OcrClient ocr) { this.ocr = ocr; }
     @Override public boolean supports(String mediaType) { return mediaType.equals("application/pdf"); }
-    @Override public ExtractionResult extract(ParseTask task, Material material, Path source, Path workDirectory) {
+    @Override public ExtractionResult extract(BackgroundTask task, Material material, Path source, Path workDirectory) {
         var units = new ArrayList<ExtractedUnit>(); var warnings = new ArrayList<String>();
         try (var document = Loader.loadPDF(source.toFile())) {
             if (document.isEncrypted()) throw new PermanentTaskException("PDF_ENCRYPTED", "暂不支持加密 PDF");

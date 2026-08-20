@@ -35,6 +35,9 @@ public class Course {
     @Column(name = "outline_generation_seq", nullable = false)
     private long outlineGenerationSequence;
 
+    @Column(name = "current_knowledge_version_id")
+    private UUID currentKnowledgeVersionId;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -86,4 +89,6 @@ public class Course {
 
     public long nextOutlineGeneration() { return ++outlineGenerationSequence; }
     public long getOutlineGenerationSequence() { return outlineGenerationSequence; }
+    public UUID getCurrentKnowledgeVersionId() { return currentKnowledgeVersionId; }
+    public void publishKnowledgeVersion(UUID knowledgeVersionId) { this.currentKnowledgeVersionId = knowledgeVersionId; }
 }

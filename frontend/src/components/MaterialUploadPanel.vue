@@ -5,6 +5,8 @@ import { ApiError } from '@/api/http'
 import { completeUpload, deleteMaterial, getMaterialPreview, getUploadStatus, initializeUpload, listMaterials, putChunk, type Material, type MaterialStatus, type MaterialType, type UploadSession } from '@/api/materials'
 import { missingChunkIndexes } from '@/upload/resume'
 import { cancelTask, republishTask, retryMaterial, type TaskEvent } from '@/api/tasks'
+import { confirmKnowledgeVersion, getKnowledgeVersion, type KnowledgeVersionState } from '@/api/knowledgeVersions'
+import { retryTask } from '@/api/tasks'
 
 const props = defineProps<{ courseId: string }>()
 const materials = ref<Material[]>([])
@@ -19,6 +21,8 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const dragging = ref(false)
 const progressConnection = ref<'connected' | 'reconnecting'>('reconnecting')
 const taskEvents = ref<Record<string, TaskEvent>>({})
+const knowledgeState = ref<KnowledgeVersionState | null>(null)
+const confirmingMaterials = ref(false)
 let progressEvents: EventSource | null = null
 
 const typeOptions: Array<{ value: MaterialType; label: string }> = [
@@ -33,6 +37,13 @@ const statusLabels: Record<MaterialStatus, string> = {
 const deletable = new Set<MaterialStatus>(['PENDING_PUBLISH', 'PUBLISH_FAILED', 'FAILED', 'CANCELLED'])
 const uploadPercent = computed(() => uploadSession.value
   ? Math.round(uploadedCount.value / uploadSession.value.totalChunks * 100) : 0)
+const unfinishedCount = computed(() => materials.value.filter(item =>
+  ['PENDING_PUBLISH', 'QUEUED', 'PROCESSING', 'RETRYING'].includes(item.status)).length + (uploading.value ? 1 : 0))
+const successfulCount = computed(() => materials.value.filter(item => item.status === 'SUCCEEDED').length)
+const ignoredMaterials = computed(() => materials.value.filter(item =>
+  ['PUBLISH_FAILED', 'FAILED', 'CANCELLED'].includes(item.status)).map(item => item.originalFilename))
+const canConfirmMaterials = computed(() => unfinishedCount.value === 0 && successfulCount.value > 0
+  && (knowledgeState.value?.hasUnconfirmedSuccessfulMaterials ?? true) && !knowledgeState.value?.activeOutlineTask)
 
 function fingerprint(file: File) { return `fw-upload:${props.courseId}:${file.name}:${file.size}:${file.lastModified}` }
 function formatSize(bytes: number) {
@@ -53,8 +64,36 @@ function chooseFile(file?: File) {
 function drop(event: DragEvent) { dragging.value = false; chooseFile(event.dataTransfer?.files[0]) }
 
 async function loadMaterials() {
-  try { materials.value = await listMaterials(props.courseId) }
+  try {
+    const [list, version] = await Promise.all([listMaterials(props.courseId), getKnowledgeVersion(props.courseId)])
+    materials.value = list; knowledgeState.value = version
+  }
   catch (error) { ElMessage.error(describe(error)) }
+}
+
+async function finalizeMaterials() {
+  try {
+    if (ignoredMaterials.value.length) await ElMessageBox.confirm(
+      `以下资料不会进入本次知识版本：${ignoredMaterials.value.join('、')}。是否忽略并继续？`,
+      '确认资料范围', { type: 'warning', confirmButtonText: '忽略并继续', cancelButtonText: '返回处理' },
+    )
+    confirmingMaterials.value = true
+    const result = await confirmKnowledgeVersion(props.courseId, ignoredMaterials.value.length > 0)
+    knowledgeState.value = { ...(knowledgeState.value as KnowledgeVersionState), activeOutlineTask: result.task,
+      hasUnconfirmedSuccessfulMaterials: false }
+    ElMessage.success('资料已确认，正在后台生成新版知识提纲')
+  } catch (error) { if (error !== 'cancel' && error !== 'close') ElMessage.error(describe(error)) }
+  finally { confirmingMaterials.value = false }
+}
+
+async function retryOutline() {
+  const failed = knowledgeState.value?.recentFailedOutlineTask
+  if (!failed) return
+  try {
+    const task = await retryTask(failed.id)
+    if (knowledgeState.value) knowledgeState.value.activeOutlineTask = task
+    ElMessage.success('已按原知识版本重试提纲生成')
+  } catch (error) { ElMessage.error(describe(error)) }
 }
 
 async function resolveSession(file: File): Promise<{ session: UploadSession; uploaded: Set<number> } | null> {
@@ -148,6 +187,8 @@ function connectProgress() {
     taskEvents.value[task.taskId] = task
     const material = materials.value.find((item) => item.taskId === task.taskId)
     if (material) material.status = task.status
+    if (knowledgeState.value?.activeOutlineTask?.id === task.taskId && ['SUCCEEDED', 'FAILED', 'CANCELLED'].includes(task.status))
+      void loadMaterials()
   })
 }
 
@@ -185,14 +226,26 @@ onBeforeUnmount(() => progressEvents?.close())
         <el-button link type="primary" @click="openPreview(scope.row)">预览</el-button>
         <el-button v-if="scope.row.status === 'PUBLISH_FAILED'" link type="primary" @click="taskAction(scope.row, 'republish')">重新投递</el-button>
         <el-button v-if="scope.row.status === 'FAILED'" link type="primary" @click="taskAction(scope.row, 'retry')">重试</el-button>
-        <el-button v-if="['PENDING_PUBLISH','QUEUED'].includes(scope.row.status)" link @click="taskAction(scope.row, 'cancel')">取消任务</el-button>
+        <el-button v-if="scope.row.status === 'QUEUED'" link @click="taskAction(scope.row, 'cancel')">取消任务</el-button>
         <el-button v-if="deletable.has(scope.row.status)" link type="danger" @click="remove(scope.row)">删除</el-button>
       </template></el-table-column>
     </el-table>
-    <div class="mobile-list"><article v-for="material in materials" :key="material.id"><strong>{{ material.originalFilename }}</strong><span>{{ formatSize(material.sizeBytes) }} · {{ statusLabels[material.status] }}</span><div><el-button link type="primary" @click="openPreview(material)">预览</el-button><el-button v-if="material.status === 'PUBLISH_FAILED'" link type="primary" @click="taskAction(material, 'republish')">重新投递</el-button><el-button v-if="material.status === 'FAILED'" link type="primary" @click="taskAction(material, 'retry')">重试</el-button><el-button v-if="['PENDING_PUBLISH','QUEUED'].includes(material.status)" link @click="taskAction(material, 'cancel')">取消任务</el-button><el-button v-if="deletable.has(material.status)" link type="danger" @click="remove(material)">删除</el-button></div></article></div>
+    <div class="mobile-list"><article v-for="material in materials" :key="material.id"><strong>{{ material.originalFilename }}</strong><span>{{ formatSize(material.sizeBytes) }} · {{ statusLabels[material.status] }}</span><div><el-button link type="primary" @click="openPreview(material)">预览</el-button><el-button v-if="material.status === 'PUBLISH_FAILED'" link type="primary" @click="taskAction(material, 'republish')">重新投递</el-button><el-button v-if="material.status === 'FAILED'" link type="primary" @click="taskAction(material, 'retry')">重试</el-button><el-button v-if="material.status === 'QUEUED'" link @click="taskAction(material, 'cancel')">取消任务</el-button><el-button v-if="deletable.has(material.status)" link type="danger" @click="remove(material)">删除</el-button></div></article></div>
+  </section>
+
+  <section class="finalize" aria-labelledby="finalize-title">
+    <div><h2 id="finalize-title">确认课程资料</h2>
+      <p v-if="unfinishedCount">还有 {{ unfinishedCount }} 份资料尚未结束，暂时不能确认。</p>
+      <p v-else-if="successfulCount === 0">至少需要一份解析成功的资料。</p>
+      <p v-else-if="!knowledgeState?.hasUnconfirmedSuccessfulMaterials">当前成功资料已生成知识版本；上传并解析新资料后可再次确认。</p>
+      <p v-else>确认后会固定本次成功资料，并在后台自动生成新版知识提纲。</p>
+      <p v-if="knowledgeState?.current" class="current-version">当前已发布：第 {{ knowledgeState.current.version }} 版</p>
+    </div>
+    <el-button type="primary" :disabled="!canConfirmMaterials" :loading="confirmingMaterials" @click="finalizeMaterials">资料已上传完毕</el-button>
+    <el-button v-if="knowledgeState?.recentFailedOutlineTask && !knowledgeState.activeOutlineTask" type="danger" plain @click="retryOutline">重试本次提纲</el-button>
   </section>
 </template>
 
 <style scoped>
-.upload-panel,.materials { background: var(--fw-surface); border: 1px solid var(--fw-border); border-radius: 12px; margin-top: 24px; padding: 24px; }h2{font-size:20px;line-height:28px;margin:0 0 4px}.upload-panel>div>p,.connection{color:var(--fw-text-secondary);margin:0}.form-grid{display:grid;gap:16px;grid-template-columns:220px 1fr;margin:20px 0}.form-grid label{display:grid;font-weight:600;gap:6px}.drop-zone{align-items:center;background:var(--fw-background);border:1px dashed #9ca3af;border-radius:8px;color:var(--fw-text);cursor:pointer;display:flex;flex-direction:column;gap:4px;padding:28px;width:100%}.drop-zone.dragging{border-color:var(--fw-primary);background:#eff6ff}.drop-zone span{color:var(--fw-text-secondary);font-weight:400}.visually-hidden{height:1px;overflow:hidden;position:absolute;width:1px;clip:rect(0 0 0 0)}.upload-actions{margin-top:16px}.progress{margin-bottom:12px}.error{color:var(--fw-danger)}.empty{color:var(--fw-text-secondary)}.mobile-list{display:none}.status{display:block;font-weight:600}.status+small{color:var(--fw-text-secondary);display:block;line-height:18px}@media(max-width:767px){.upload-panel,.materials{padding:20px}.form-grid{grid-template-columns:1fr}.desktop-table{display:none}.mobile-list{display:grid;gap:12px}.mobile-list article{border:1px solid var(--fw-border);border-radius:8px;display:grid;gap:6px;padding:16px}.mobile-list span{color:var(--fw-text-secondary)}}
+.upload-panel,.materials,.finalize { background: var(--fw-surface); border: 1px solid var(--fw-border); border-radius: 12px; margin-top: 24px; padding: 24px; }h2{font-size:20px;line-height:28px;margin:0 0 4px}.upload-panel>div>p,.connection,.finalize p{color:var(--fw-text-secondary);margin:0}.finalize{align-items:center;display:flex;gap:12px}.finalize>div{flex:1}.current-version{margin-top:6px!important}.form-grid{display:grid;gap:16px;grid-template-columns:220px 1fr;margin:20px 0}.form-grid label{display:grid;font-weight:600;gap:6px}.drop-zone{align-items:center;background:var(--fw-background);border:1px dashed #9ca3af;border-radius:8px;color:var(--fw-text);cursor:pointer;display:flex;flex-direction:column;gap:4px;padding:28px;width:100%}.drop-zone.dragging{border-color:var(--fw-primary);background:#eff6ff}.drop-zone span{color:var(--fw-text-secondary);font-weight:400}.visually-hidden{height:1px;overflow:hidden;position:absolute;width:1px;clip:rect(0 0 0 0)}.upload-actions{margin-top:16px}.progress{margin-bottom:12px}.error{color:var(--fw-danger)}.empty{color:var(--fw-text-secondary)}.mobile-list{display:none}.status{display:block;font-weight:600}.status+small{color:var(--fw-text-secondary);display:block;line-height:18px}@media(max-width:767px){.upload-panel,.materials,.finalize{padding:20px}.finalize{align-items:stretch;flex-direction:column}.form-grid{grid-template-columns:1fr}.desktop-table{display:none}.mobile-list{display:grid;gap:12px}.mobile-list article{border:1px solid var(--fw-border);border-radius:8px;display:grid;gap:6px;padding:16px}.mobile-list span{color:var(--fw-text-secondary)}}
 </style>

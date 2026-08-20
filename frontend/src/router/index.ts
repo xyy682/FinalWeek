@@ -12,6 +12,7 @@ const router = createRouter({
     { path: '/courses/:id/outline', name: 'outline', component: () => import('@/views/CourseSectionPage.vue'), meta: { title: '知识提纲', section: 'outline' } },
     { path: '/courses/:id/plan', name: 'plan', component: () => import('@/views/CourseSectionPage.vue'), meta: { title: '复习计划', section: 'plan' } },
     { path: '/courses/:id/chat', name: 'chat', component: () => import('@/views/CourseSectionPage.vue'), meta: { title: '课程问答', section: 'chat' } },
+    { path: '/courses/:id/mock-exams', name: 'mock-exams', component: () => import('@/views/CourseSectionPage.vue'), meta: { title: '模拟卷', section: 'mock-exams' } },
     { path: '/settings', name: 'settings', component: () => import('@/views/SettingsPage.vue'), meta: { title: '账号设置' } },
   ],
 })
@@ -27,4 +28,3 @@ router.afterEach((to) => {
 })
 
 export default router
-

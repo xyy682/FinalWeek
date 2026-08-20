@@ -3,8 +3,8 @@ package com.finalweek.upload;
 import com.finalweek.course.Course;
 import com.finalweek.material.Material;
 import com.finalweek.material.MaterialRepository;
-import com.finalweek.task.ParseTask;
-import com.finalweek.task.ParseTaskRepository;
+import com.finalweek.task.BackgroundTask;
+import com.finalweek.task.BackgroundTaskRepository;
 import com.finalweek.task.TaskCheckpoint;
 import com.finalweek.task.TaskCheckpointRepository;
 import com.finalweek.task.TaskStage;
@@ -17,11 +17,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class MaterialFinalizer {
     private final MaterialRepository materials;
     private final UploadCompletionRepository completions;
-    private final ParseTaskRepository tasks;
+    private final BackgroundTaskRepository tasks;
     private final TaskCheckpointRepository checkpoints;
 
     public MaterialFinalizer(MaterialRepository materials, UploadCompletionRepository completions,
-                             ParseTaskRepository tasks, TaskCheckpointRepository checkpoints) {
+                             BackgroundTaskRepository tasks, TaskCheckpointRepository checkpoints) {
         this.materials = materials;
         this.completions = completions;
         this.tasks = tasks;
@@ -39,7 +39,7 @@ public class MaterialFinalizer {
     }
 
     @Transactional(readOnly = true)
-    public Optional<ParseTask> taskFor(Material material) { return tasks.findByMaterial_Id(material.getId()); }
+    public Optional<BackgroundTask> taskFor(Material material) { return tasks.findByMaterial_Id(material.getId()); }
 
     @Transactional
     public Material recordDuplicate(UUID uploadId, Material material) {
@@ -54,11 +54,11 @@ public class MaterialFinalizer {
                 metadata.fileSize(), metadata.mediaType(), metadata.materialType(), metadata.focusNotes()));
         completions.save(new UploadCompletion(uploadId, material));
         materials.flush();
-        var task = tasks.save(new ParseTask(metadata.userId(), metadata.courseId(), material));
+        var task = tasks.save(new BackgroundTask(metadata.userId(), metadata.courseId(), material));
         tasks.flush();
         checkpoints.save(new TaskCheckpoint(task, TaskStage.UPLOADED, objectKey, null));
         return new FinalizedMaterial(material, task);
     }
 
-    public record FinalizedMaterial(Material material, ParseTask task) {}
+    public record FinalizedMaterial(Material material, BackgroundTask task) {}
 }

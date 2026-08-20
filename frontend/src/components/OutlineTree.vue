@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { ApiError } from '@/api/http'
-import { generateOutline, getOutline, updateOutlineImportance, type Outline, type OutlineImportance, type OutlineNode, type OutlineSource } from '@/api/outline'
+import { getOutline, updateOutlineImportance, type Outline, type OutlineImportance, type OutlineNode, type OutlineSource } from '@/api/outline'
 import { getMaterialPreview, getSourceSegment, listMaterials, type Material, type MaterialPreview, type SourceSegment } from '@/api/materials'
 import { getTask, republishTask, type TaskEvent, type TaskProgress } from '@/api/tasks'
 
@@ -11,7 +11,6 @@ const outline = ref<Outline | null>(null)
 const activeTask = ref<TaskProgress | null>(null)
 const materials = ref<Material[]>([])
 const loading = ref(true)
-const generating = ref(false)
 const connection = ref<'connected' | 'reconnecting'>('reconnecting')
 const drawerOpen = ref(false)
 const selectedSegment = ref<SourceSegment | null>(null)
@@ -27,7 +26,6 @@ const stageLabels: Record<string, string> = {
 }
 const defaultExpanded = computed(() => outline.value?.nodes.flatMap(node => [node.id, ...node.children.map(child => child.id)]) ?? [])
 const selectedMaterial = computed(() => materials.value.find(item => item.id === selectedSegment.value?.materialId) ?? null)
-const taskIsActive = computed(() => !!activeTask.value && ['PENDING_PUBLISH', 'PUBLISH_FAILED', 'QUEUED', 'PROCESSING', 'RETRYING'].includes(activeTask.value.status))
 
 function describe(error: unknown) {
   return error instanceof ApiError ? `${error.body.message}（${error.body.code} · ${error.body.requestId}）` : '操作失败，请稍后重试'
@@ -55,18 +53,6 @@ async function load() {
     if (activeTask.value) startPolling()
   } catch (error) { ElMessage.error(describe(error)) }
   finally { loading.value = false }
-}
-async function generate() {
-  try {
-    if (outline.value) await ElMessageBox.confirm('将覆盖当前提纲及人工重要度调整。是否继续？', '重新生成提纲', {
-      type: 'warning', confirmButtonText: '覆盖并生成', cancelButtonText: '取消',
-    })
-    generating.value = true
-    const result = await generateOutline(props.courseId)
-    activeTask.value = result.task; startPolling()
-    ElMessage.success(result.existing ? '已有生成任务，已继续显示其进度' : '提纲生成任务已提交')
-  } catch (error) { if (error !== 'cancel' && error !== 'close') ElMessage.error(describe(error)) }
-  finally { generating.value = false }
 }
 async function republish() {
   if (!activeTask.value) return
@@ -123,9 +109,6 @@ onBeforeUnmount(() => { events?.close(); if (pollTimer != null) window.clearInte
   <section class="outline-panel" aria-labelledby="outline-title" v-loading="loading">
     <header>
       <div><h2 id="outline-title">知识提纲</h2><p>按课程资料生成，所有知识点都可回到原文核验。</p></div>
-      <el-button type="primary" :disabled="taskIsActive" :loading="generating" @click="generate">
-        {{ outline ? '重新生成' : '生成提纲' }}
-      </el-button>
     </header>
 
     <article v-if="activeTask" class="task-card" aria-live="polite">
@@ -135,8 +118,8 @@ onBeforeUnmount(() => { events?.close(); if (pollTimer != null) window.clearInte
       <el-button v-if="activeTask.status === 'PUBLISH_FAILED'" type="primary" link @click="republish">重新投递</el-button>
     </article>
 
-    <el-empty v-if="!outline && !activeTask" description="至少一份资料解析成功后，可以生成带来源的知识提纲">
-      <el-button type="primary" @click="generate">生成提纲</el-button>
+    <el-empty v-if="!outline && !activeTask" description="请先在资料页确认“资料已上传完毕”，系统会自动生成带来源的知识提纲">
+      <RouterLink :to="`/courses/${courseId}/materials`"><el-button type="primary">前往确认资料</el-button></RouterLink>
     </el-empty>
     <template v-else-if="outline">
       <p class="version">第 {{ outline.generationVersion }} 版 · 更新于 {{ new Date(outline.updatedAt).toLocaleString() }}</p>

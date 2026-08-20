@@ -13,7 +13,7 @@ public class TaskPublisher {
     public TaskPublisher(RabbitTemplate rabbit, TaskProperties properties) {
         this.rabbit = rabbit; this.properties = properties;
     }
-    public TaskMessage publish(ParseTask task) {
+    public TaskMessage publish(BackgroundTask task) {
         var body = TaskMessage.create(task);
         var correlation = new CorrelationData(body.messageId());
         rabbit.convertAndSend(properties.exchange(), properties.routingKey(), body, message -> {

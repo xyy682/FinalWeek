@@ -15,11 +15,11 @@ import org.slf4j.LoggerFactory;
 public class TaskConsumer {
     private static final Logger log = LoggerFactory.getLogger(TaskConsumer.class);
     private final TaskStateService states;
-    private final ParseTaskRepository tasks;
+    private final BackgroundTaskRepository tasks;
     private final List<TaskPipeline> pipelines;
     private final TaskProperties properties;
     private final RedissonClient redisson;
-    public TaskConsumer(TaskStateService states, ParseTaskRepository tasks, List<TaskPipeline> pipelines,
+    public TaskConsumer(TaskStateService states, BackgroundTaskRepository tasks, List<TaskPipeline> pipelines,
                         TaskProperties properties, RedissonClient redisson) {
         this.states = states; this.tasks = tasks; this.pipelines = pipelines;
         this.properties = properties; this.redisson = redisson;

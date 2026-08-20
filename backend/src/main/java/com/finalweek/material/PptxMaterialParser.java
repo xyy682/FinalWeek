@@ -1,7 +1,7 @@
 package com.finalweek.material;
 
 import com.finalweek.ai.OcrClient;
-import com.finalweek.task.ParseTask;
+import com.finalweek.task.BackgroundTask;
 import com.finalweek.task.PermanentTaskException;
 import com.finalweek.task.RetryableTaskException;
 import java.nio.file.Files;
@@ -24,7 +24,7 @@ public class PptxMaterialParser implements MaterialParser {
     @Override public boolean supports(String mediaType) {
         return mediaType.equals("application/vnd.openxmlformats-officedocument.presentationml.presentation");
     }
-    @Override public ExtractionResult extract(ParseTask task, Material material, Path source, Path workDirectory) {
+    @Override public ExtractionResult extract(BackgroundTask task, Material material, Path source, Path workDirectory) {
         var nativeTexts = new ArrayList<String>();
         try (var input = Files.newInputStream(source); var deck = new XMLSlideShow(input)) {
             deck.getSlides().forEach(slide -> nativeTexts.add(slide.getShapes().stream()

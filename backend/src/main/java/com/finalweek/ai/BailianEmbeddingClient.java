@@ -3,7 +3,7 @@ package com.finalweek.ai;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.finalweek.common.config.FinalWeekProperties;
-import com.finalweek.task.ParseTaskRepository;
+import com.finalweek.task.BackgroundTaskRepository;
 import com.finalweek.task.PermanentTaskException;
 import com.finalweek.task.RetryableTaskException;
 import java.net.URI;
@@ -21,11 +21,11 @@ import org.springframework.stereotype.Service;
 @Service
 public class BailianEmbeddingClient implements EmbeddingClient {
     private final FinalWeekProperties properties;
-    private final ParseTaskRepository tasks;
+    private final BackgroundTaskRepository tasks;
     private final ObjectMapper mapper;
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build();
 
-    public BailianEmbeddingClient(FinalWeekProperties properties, ParseTaskRepository tasks, ObjectMapper mapper) {
+    public BailianEmbeddingClient(FinalWeekProperties properties, BackgroundTaskRepository tasks, ObjectMapper mapper) {
         this.properties = properties; this.tasks = tasks; this.mapper = mapper;
     }
 

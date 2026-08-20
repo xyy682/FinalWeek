@@ -2,7 +2,7 @@ package com.finalweek.ai;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.finalweek.common.config.FinalWeekProperties;
-import com.finalweek.task.ParseTaskRepository;
+import com.finalweek.task.BackgroundTaskRepository;
 import com.finalweek.task.PermanentTaskException;
 import com.finalweek.task.RetryableTaskException;
 import java.net.URI;
@@ -19,14 +19,14 @@ import org.springframework.stereotype.Service;
 @Service
 public class BailianLlmClient implements LlmClient {
     private final FinalWeekProperties properties;
-    private final ParseTaskRepository tasks;
+    private final BackgroundTaskRepository tasks;
     private final ObjectMapper mapper;
     private final HttpClient http;
     @Autowired
-    public BailianLlmClient(FinalWeekProperties properties, ParseTaskRepository tasks, ObjectMapper mapper) {
+    public BailianLlmClient(FinalWeekProperties properties, BackgroundTaskRepository tasks, ObjectMapper mapper) {
         this(properties, tasks, mapper, HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build());
     }
-    BailianLlmClient(FinalWeekProperties properties, ParseTaskRepository tasks, ObjectMapper mapper, HttpClient http) {
+    BailianLlmClient(FinalWeekProperties properties, BackgroundTaskRepository tasks, ObjectMapper mapper, HttpClient http) {
         this.properties = properties; this.tasks = tasks; this.mapper = mapper; this.http = http;
     }
 
@@ -38,7 +38,7 @@ public class BailianLlmClient implements LlmClient {
         return generateJson(null, systemPrompt, userPrompt, timeout);
     }
 
-    private String generateJson(UUID taskId, String systemPrompt, String userPrompt, Duration timeout) {
+    @Override public String generateJson(UUID taskId, String systemPrompt, String userPrompt, Duration timeout) {
         var ai = properties.ai();
         if (ai.apiKey() == null || ai.apiKey().isBlank()) throw new PermanentTaskException(
                 "AI_CONFIG_MISSING", "AI 生成需要配置 BAILIAN_API_KEY");

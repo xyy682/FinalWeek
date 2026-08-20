@@ -1,0 +1,1 @@
+{"id":"mock-formula","kind":"MOCK_EXAM","fixture":"native-pdf.txt","annotation":"14-mock-formula.json","request":{"allowGeneralKnowledge":false,"questionCounts":{"CALCULATION":2}},"segments":[{"id":"e0000000-0000-0000-0000-000000000001","content":"一维匀加速运动满足 v=v_0+at 与 s=v_0t+\\frac{1}{2}at^2。速度和位移应使用 SI 单位。"}]}

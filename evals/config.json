@@ -1,9 +1,14 @@
 {
-  "caseVersion": "2026.08.1",
-  "caseCount": 8,
+  "caseVersion": "2026.08.2",
+  "caseCount": 14,
   "thresholds": {
     "coverage": 0.80,
     "citationAccuracy": 0.90,
-    "ungroundedUnmarkedRatio": 0.10
+    "ungroundedUnmarkedRatio": 0.10,
+    "structuralValidity": 0.95,
+    "sourceFidelity": 0.90,
+    "answerConsistency": 0.95,
+    "sourceReplicationRatio": 0.00,
+    "pdfUsability": 0.95
   }
 }

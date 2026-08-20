@@ -6,7 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import com.finalweek.ai.OcrClient;
-import com.finalweek.task.ParseTask;
+import com.finalweek.task.BackgroundTask;
 import com.finalweek.task.PermanentTaskException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -48,7 +48,7 @@ class PdfMaterialParserTest {
                         exception -> assertThat(exception.code()).isEqualTo("PDF_PARSE_FAILED"));
     }
 
-    private ParseTask task() { var task = mock(ParseTask.class); when(task.getId()).thenReturn(UUID.randomUUID()); return task; }
+    private BackgroundTask task() { var task = mock(BackgroundTask.class); when(task.getId()).thenReturn(UUID.randomUUID()); return task; }
     private Path createPdf(String text) throws Exception {
         var source = directory.resolve(UUID.randomUUID() + ".pdf");
         try (var document = new PDDocument()) {

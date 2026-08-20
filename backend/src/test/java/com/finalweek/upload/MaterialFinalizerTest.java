@@ -10,8 +10,8 @@ import com.finalweek.course.Course;
 import com.finalweek.material.Material;
 import com.finalweek.material.MaterialRepository;
 import com.finalweek.material.MaterialType;
-import com.finalweek.task.ParseTask;
-import com.finalweek.task.ParseTaskRepository;
+import com.finalweek.task.BackgroundTask;
+import com.finalweek.task.BackgroundTaskRepository;
 import com.finalweek.task.TaskCheckpoint;
 import com.finalweek.task.TaskCheckpointRepository;
 import com.finalweek.task.TaskStage;
@@ -25,10 +25,10 @@ class MaterialFinalizerTest {
     void createsUploadedCheckpointInSameFinalizationTransaction() {
         var materials = mock(MaterialRepository.class);
         var completions = mock(UploadCompletionRepository.class);
-        var tasks = mock(ParseTaskRepository.class);
+        var tasks = mock(BackgroundTaskRepository.class);
         var checkpoints = mock(TaskCheckpointRepository.class);
         when(materials.save(any(Material.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(tasks.save(any(ParseTask.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(tasks.save(any(BackgroundTask.class))).thenAnswer(invocation -> invocation.getArgument(0));
         var finalizer = new MaterialFinalizer(materials, completions, tasks, checkpoints);
         var userId = UUID.randomUUID();
         var courseId = UUID.randomUUID();

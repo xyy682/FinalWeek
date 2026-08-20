@@ -5,7 +5,7 @@ import com.alibaba.dashscope.audio.asr.recognition.RecognitionParam;
 import com.alibaba.dashscope.audio.asr.recognition.RecognitionResult;
 import com.alibaba.dashscope.common.ResultCallback;
 import com.finalweek.common.config.FinalWeekProperties;
-import com.finalweek.task.ParseTaskRepository;
+import com.finalweek.task.BackgroundTaskRepository;
 import com.finalweek.task.PermanentTaskException;
 import com.finalweek.task.RetryableTaskException;
 import java.nio.ByteBuffer;
@@ -20,8 +20,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class BailianAsrClient implements AsrClient {
     private final FinalWeekProperties properties;
-    private final ParseTaskRepository tasks;
-    public BailianAsrClient(FinalWeekProperties properties, ParseTaskRepository tasks) {
+    private final BackgroundTaskRepository tasks;
+    public BailianAsrClient(FinalWeekProperties properties, BackgroundTaskRepository tasks) {
         this.properties = properties; this.tasks = tasks;
     }
     @Override public List<AsrSentence> recognize(UUID taskId, Path wavFile) {

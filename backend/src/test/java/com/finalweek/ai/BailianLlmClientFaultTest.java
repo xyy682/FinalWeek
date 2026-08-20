@@ -5,7 +5,7 @@ import static org.mockito.Mockito.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.finalweek.common.config.FinalWeekProperties;
-import com.finalweek.task.ParseTaskRepository;
+import com.finalweek.task.BackgroundTaskRepository;
 import com.finalweek.task.PermanentTaskException;
 import com.finalweek.task.RetryableTaskException;
 import com.sun.net.httpserver.HttpServer;
@@ -22,7 +22,7 @@ class BailianLlmClientFaultTest {
         for (var status : new int[] {429, 503}) {
             var requests = new AtomicInteger(); var server = server(status, requests);
             try {
-                var tasks = mock(ParseTaskRepository.class); var taskId = UUID.randomUUID();
+                var tasks = mock(BackgroundTaskRepository.class); var taskId = UUID.randomUUID();
                 var client = new BailianLlmClient(properties(server, 3), tasks, new ObjectMapper(), HttpClient.newHttpClient());
                 assertThatThrownBy(() -> client.generateJson(taskId, "system", "user"))
                         .isInstanceOf(RetryableTaskException.class);
@@ -36,7 +36,7 @@ class BailianLlmClientFaultTest {
     void doesNotRetryPermanentThirdParty4xx() throws Exception {
         var requests = new AtomicInteger(); var server = server(400, requests);
         try {
-            var client = new BailianLlmClient(properties(server, 3), mock(ParseTaskRepository.class),
+            var client = new BailianLlmClient(properties(server, 3), mock(BackgroundTaskRepository.class),
                     new ObjectMapper(), HttpClient.newHttpClient());
             assertThatThrownBy(() -> client.generateJson(UUID.randomUUID(), "system", "user"))
                     .isInstanceOf(PermanentTaskException.class);

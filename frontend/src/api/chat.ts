@@ -12,13 +12,13 @@ export interface ChatMessage {
   errorCode: string | null; createdAt: string
 }
 export interface MessagePage { messages: ChatMessage[]; nextCursor: string | null }
-export interface ChatExchange { question: ChatMessage; answer: ChatMessage; idempotentReplay: boolean }
+export interface ChatAccepted { question: ChatMessage; answer: ChatMessage | null; task: import('./tasks').TaskProgress; idempotentReplay: boolean }
 
 export const getMessages = (courseId: string, cursor?: string | null) =>
   apiFetch<MessagePage>(`/courses/${courseId}/messages${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`)
 export const askQuestion = (courseId: string, question: string, signal?: AbortSignal) =>
-  apiFetch<ChatExchange>(`/courses/${courseId}/messages`, {
+  apiFetch<ChatAccepted>(`/courses/${courseId}/messages`, {
     method: 'POST', body: JSON.stringify({ question }), signal,
   })
 export const retryQuestion = (messageId: string, signal?: AbortSignal) =>
-  apiFetch<ChatExchange>(`/chat-messages/${messageId}/retry`, { method: 'POST', signal })
+  apiFetch<ChatAccepted>(`/chat-messages/${messageId}/retry`, { method: 'POST', signal })

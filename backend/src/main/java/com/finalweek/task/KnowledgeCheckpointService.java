@@ -12,13 +12,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class KnowledgeCheckpointService {
-    private final ParseTaskRepository tasks;
+    private final BackgroundTaskRepository tasks;
     private final TaskCheckpointRepository checkpoints;
     private final MaterialRepository materials;
     private final CourseSegmentRepository segments;
     private final TaskProgressService progress;
 
-    public KnowledgeCheckpointService(ParseTaskRepository tasks, TaskCheckpointRepository checkpoints,
+    public KnowledgeCheckpointService(BackgroundTaskRepository tasks, TaskCheckpointRepository checkpoints,
                                       MaterialRepository materials, CourseSegmentRepository segments,
                                       TaskProgressService progress) {
         this.tasks = tasks; this.checkpoints = checkpoints; this.materials = materials;

@@ -1,0 +1,1 @@
+{"id":"mock-strict-insufficient","kind":"MOCK_EXAM","fixture":"native-pdf.txt","annotation":"11-mock-strict-insufficient.json","request":{"allowGeneralKnowledge":false,"questionCounts":{"CALCULATION":3}},"segments":[{"id":"b0000000-0000-0000-0000-000000000001","content":"课程材料只给出功率的定义 P=W/t，没有交流电路、复数阻抗或相量计算内容。"}]}

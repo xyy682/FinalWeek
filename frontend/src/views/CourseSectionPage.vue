@@ -8,12 +8,13 @@ import MaterialUploadPanel from '@/components/MaterialUploadPanel.vue'
 import OutlineTree from '@/components/OutlineTree.vue'
 import StudyPlanPanel from '@/components/StudyPlanPanel.vue'
 import CourseChatPanel from '@/components/CourseChatPanel.vue'
+import MockExamPanel from '@/components/MockExamPanel.vue'
 
 const route = useRoute()
 const course = ref<Course | null>(null)
 const errorMessage = ref('')
 const section = computed(() => String(route.meta.section ?? 'materials'))
-const labels: Record<string, string> = { materials: '资料', outline: '知识提纲', plan: '复习计划', chat: '课程问答' }
+const labels: Record<string, string> = { materials: '资料', outline: '知识提纲', plan: '复习计划', chat: '课程问答', 'mock-exams': '模拟卷' }
 
 async function load() {
   try { course.value = await getCourse(String(route.params.id)) }
@@ -37,6 +38,7 @@ watch(() => route.params.id, load)
       <OutlineTree v-else-if="section === 'outline'" :course-id="course.id" />
       <StudyPlanPanel v-else-if="section === 'plan'" :course-id="course.id" />
       <CourseChatPanel v-else-if="section === 'chat'" :course-id="course.id" />
+      <MockExamPanel v-else-if="section === 'mock-exams'" :course-id="course.id" />
       <section v-else class="phase-placeholder"><h2>{{ labels[section] }}</h2><p>课程框架已就绪，此区域将在后续实施阶段按计划接入完整功能。</p></section>
     </template>
   </main>

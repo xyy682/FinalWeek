@@ -1,5 +1,7 @@
 # Backend Structure — FinalWeek（求职版 MVP）
 
+> 文档状态：Phase 1–16 已完成。文末“Phase 12–16 扩展架构”对应已交付的迁移、JPA 模型、REST 接口、任务管线和测试要求。
+
 ## Architecture
 
 ```text
@@ -149,7 +151,7 @@ Spring Boot 是唯一应用服务和权限入口。求职版 MVP 中 RabbitMQ �
 - `result_plan_version`
 - timestamps
 
-同步超时重试复用同一记录；若同一幂等键已成功则返回既有结果版本，不再次调用模型。较旧请求不得覆盖更新版本的当前计划。
+后台模型调用超时后的重试复用同一记录；若同一幂等键已成功则返回既有结果版本，不再次调用模型。较旧请求不得覆盖更新版本的当前计划。
 
 ### `plan_task`
 
@@ -373,7 +375,7 @@ Lucene 索引损坏、丢失或首次初始化时可由 `course_segment` 全量�
 
 ## Study Plan Rules
 
-计划生成是同步 REST，不进入 RabbitMQ、不创建异步 parse_task、也不发送 SSE。请求超时由 `PLAN_REQUEST_TIMEOUT_SECONDS` 配置；调用前执行用户级计划限流。请求必须携带幂等键并写入 `plan_generation_request`，生成结果与当前计划的版本 CAS 替换必须在单个数据库事务中完成。超时/失败不修改旧计划，客户端必须先重新读取当前计划并以同一幂等键重试。
+计划生成通过 RabbitMQ `GENERATE_PLAN` 后台任务执行并返回 `202`。调用前执行用户级限流；请求携带幂等键并写入 `plan_generation_request`，同时固定知识版本、预期当前计划版本和任务 ID。生成结果与当前计划的版本 CAS 替换在单个数据库事务中完成；超时、失败或版本竞争不修改旧计划。
 
 - 只接受当前提纲节点作为任务内容。
 - 高重要度和低掌握程度获得更多时间。
@@ -383,7 +385,7 @@ Lucene 索引损坏、丢失或首次初始化时可由 `course_segment` 全量�
 
 ## Chat Rules
 
-课程问答是非流式同步 REST，不进入 RabbitMQ、不发送 SSE。请求超时由 `CHAT_REQUEST_TIMEOUT_SECONDS` 配置。后端先写一条 `PENDING` 用户消息；成功时在同一事务写助手消息并把用户消息改为 `SUCCEEDED`，失败/超时改为 `FAILED`。重试接口以原消息 ID 做幂等状态迁移，不重复写入用户消息。
+课程问答不做 token 流式输出，但模型处理通过隐藏的 `ANSWER_CHAT` RabbitMQ 任务执行。后端在同一事务写 `PENDING` 用户消息和后台任务并返回 `202`；成功时写助手消息并把用户消息改为 `SUCCEEDED`，失败/超时改为 `FAILED`。重试接口以原消息 ID 做幂等状态迁移，不重复写入用户消息；该任务不出现在全局抽屉。
 
 - 输入仅文字。
 - 对话历史持久化 MySQL，向模型只发送最近 N 条和当前检索上下文；N 通过配置设置。
@@ -393,8 +395,8 @@ Lucene 索引损坏、丢失或首次初始化时可由 `course_segment` 全量�
 
 ## Rate Limiting
 
-- Redisson `RRateLimiter`：RabbitMQ 任务用户级/全局限流（覆盖资料解析和提纲生成）、用户级计划生成限流、用户级问答限流。
-- 限流必须发生在 RabbitMQ 投递或同步 LLM 调用前；手动重投同样重新获取令牌。
+- Redisson `RRateLimiter`：RabbitMQ 任务用户级/全局限流（覆盖资料、提纲、计划和模拟卷）、用户级计划/模拟卷生成限流、用户级问答限流。
+- 限流必须发生在 RabbitMQ 投递前；手动重投同样重新获取令牌。
 - Redis 不可用时，登录以及全部需要认证的后端请求统一 fail closed，返回 HTTP 503 和稳定错误 `SERVICE_REDIS_UNAVAILABLE`；静态落地页与无需认证的健康检查不受影响。
 - 默认阈值是本地 Demo 保护参数，README 必须如实说明未经过生产流量验证。
 
@@ -465,6 +467,160 @@ Lucene 索引损坏、丢失或首次初始化时可由 `course_segment` 全量�
 
 ## Configuration Policy
 
-课程数、文件大小/时长、上传 TTL、RabbitMQ/计划/问答限流、RRF 与各路 TopK、同步计划/问答超时、对话历史条数、Golden Case 数量及通过阈值，全部作为“首版默认可配置值”。默认值集中在类型化配置和 `.env.example`，不是不可修改的业务需求；每次评测必须固化当次配置。
+课程数、文件大小/时长、上传 TTL、RabbitMQ/计划/问答限流、RRF 与各路 TopK、后台计划/问答模型超时、对话历史条数、Golden Case 数量及通过阈值，全部作为“首版默认可配置值”。默认值集中在类型化配置和 `.env.example`，不是不可修改的业务需求；每次评测必须固化当次配置。
 
 百炼首版默认模型：`BAILIAN_ASR_MODEL=paraformer-realtime-v2`、`BAILIAN_OCR_MODEL=qwen-vl-ocr-latest`、`BAILIAN_EMBEDDING_MODEL=text-embedding-v4`、`BAILIAN_LLM_MODEL=qwen3.7-plus`。实际供应商不支持默认 ID 时必须显式修改配置，并在评测报告中记录真实 ID。
+
+## Phase 12–16 扩展架构（已实现）
+
+### Module Changes
+
+- `task` 从面向解析的任务模型演进为通用后台任务，统一驱动资料解析、提纲、计划、模拟卷和答疑；答疑类型对全局任务查询隐藏。
+- 新增 `knowledgeversion`（或 `course` 内等价包级边界）管理资料快照、当前发布版本和确认幂等。
+- 新增 `mockexam` 管理出卷请求、结构化题目、内部来源、XeLaTeX 渲染、双 PDF 发布、历史与逻辑删除。
+- `plan` 保留唯一当前计划与现有业务校验，生成编排迁移到后台任务。
+- `chat` 保留消息状态与引用约束，模型处理迁移到后台消费者；它不复用用户可见任务历史。
+
+仍保持单 Spring Boot JVM、单 RabbitMQ 任务基础设施和包级模块，不拆 Python Worker、微服务或独立 PDF 服务。
+
+### Target Data Model
+
+#### `course_knowledge_version`
+
+- `id`, `course_id`, `version`, `status`, `material_set_hash`, `outline_id`, `created_at`, `published_at`, `error_code`。
+- 状态为 `GENERATING`、`PUBLISHED`、`SUPERSEDED`、`FAILED`；`(course_id, version)` 唯一，每门课程至多一个当前 `PUBLISHED` 指针。新版发布时旧版转为 `SUPERSEDED`，但不删除其快照和提纲。
+- 版本一经创建，其资料集合不可变；失败版本可按同一业务键重试，成功发布以课程锁和预期当前版本 CAS 完成。
+
+#### `course_knowledge_version_material`
+
+- `knowledge_version_id`, `material_id`, `position`，联合唯一约束防止重复资料。
+- 只能引用确认瞬间属于当前用户/课程且状态为 `SUCCEEDED` 的资料。
+- `material_set_hash` 由排序后的 material ID 与内容哈希规范化计算，用于阻止无新增资料的重复确认。
+
+#### Versioned Outline
+
+- `outline` 改为一对一关联 `course_knowledge_version`，旧提纲和节点内部保留但默认接口只返回当前发布版本。
+- `outline_node` 的来源必须属于该知识版本资料快照。人工重要度只修改当前版本节点；新版本不自动继承旧节点调整。
+- 发布新版不删除旧节点，确保生成中的模拟卷及历史版本引用稳定。
+
+#### `background_task`
+
+- 以迁移方式保留现有 `parse_task` 数据并规范化名称；字段至少包括现有任务字段以及 `task_type`, `business_id`, `visible_in_global_drawer`, `generation_version`。
+- 任务类型：`PARSE_MATERIAL`、`GENERATE_OUTLINE`、`GENERATE_PLAN`、`GENERATE_MOCK_EXAM`、`ANSWER_CHAT`。
+- 通用状态继续使用 `PENDING_PUBLISH`、`PUBLISH_FAILED`、`QUEUED`、`PROCESSING`、`RETRYING`、`SUCCEEDED`、`FAILED`、`CANCELLED`。
+- 资料、提纲、计划和模拟卷类型对全局抽屉可见；答疑类型不可见但仍有持久化任务终态、重试预算和幂等业务键。
+- `task_checkpoint` 和 `failed_task` 外键迁移到通用任务；不同任务类型使用自己的合法阶段集合，禁止跨类型 checkpoint。
+
+#### Plan Changes
+
+- `plan_generation_request` 增加 `background_task_id` 和提交时 `knowledge_version_id`，继续保留幂等键、请求哈希、预期计划版本和结果版本。
+- `study_plan` 关联生成依据的 `knowledge_version_id`。课程当前版本更高时接口返回 `stale=true`，但计划任务仍可修改完成状态。
+- 同一课程同一时刻最多一个活动计划生成任务；成功原子替换唯一计划，提纲版本或计划版本变化时失败且保留旧计划。
+
+#### Chat Changes
+
+- `chat_message` 的 `PENDING/SUCCEEDED/FAILED` 语义保持不变；问题创建事务同时创建 `ANSWER_CHAT` 后台任务。
+- 任务检索当前全部 `SUCCEEDED` 资料，不绑定知识版本。重试复用原问题和业务键，不创建重复用户消息。
+
+#### `mock_exam`
+
+- 字段至少包含 `id`, `user_id`, `course_id`, `knowledge_version_id`, `task_id`, `retry_of_id`, `display_name`, `pdf_title`, `status`, `request_json`, `request_hash`, `allow_general_knowledge`, `question_count`, `score_sum`, `total_score_requested`, `duration_minutes`, `warnings_json`, `paper_object_key`, `answer_object_key`, `created_at`, `completed_at`, `deleted_at`。
+- `request_json` 保存经过服务端规范化的题型数量、范围节点、分值模式、可选总分/时长和补充说明；重试必须新建记录并通过 `retry_of_id` 关联原快照。
+- 同一课程通过活动任务唯一约束/事务锁保证同时最多一个未终态模拟卷任务。
+- `status` 是业务投影，终态包括 `SUCCEEDED`、`FAILED`、`CANCELLED`；`deleted_at` 非空后所有用户查询视为不存在。
+
+#### `mock_exam_question`
+
+- 字段至少包含 `id`, `mock_exam_id`, `position`, `section_position`, `question_type`, `stem`, `options_json`, `answer_json`, `score`, `uses_general_knowledge`, `formula_metadata_json`。
+- 题型枚举固定为 `SINGLE_CHOICE`、`MULTIPLE_CHOICE`、`TRUE_FALSE`、`FILL_BLANK`、`SHORT_ANSWER`、`CALCULATION`、`ESSAY`。
+- `options_json` 只用于选择题；`answer_json` 按题型保存正确选项、按空答案、参考文本或必要计算步骤。位置在同一试卷内唯一。
+
+#### `mock_exam_question_source`
+
+- `question_id`, `segment_id` 联合唯一。课程内题至少一个来源，来源必须属于任务知识版本的资料集合和模型允许上下文。
+- 通用知识题不得伪造 segment 来源；其 `uses_general_knowledge=true`，只在参考答案模板中显示标识。
+
+### Target REST API
+
+所有接口继续使用 `/api/v1`、Cookie Session、CSRF、课程 ownership 隔离和统一错误体。
+
+#### Knowledge Version and Active Tasks
+
+- `POST /courses/{courseId}/knowledge-versions`：确认当前成功资料并创建知识版本/提纲任务，返回 `202`、版本摘要和 `taskId`。
+- `GET /courses/{courseId}/knowledge-version`：返回当前发布版本、是否有未确认成功资料、活动/最近失败提纲任务及功能可用性。
+- `POST /tasks/{taskId}/retry`：按原业务快照开启新的执行轮次；只允许匹配任务类型的失败状态。
+- `GET /tasks/active`：返回当前用户所有对抽屉可见的活动任务，包含课程名、跳转目标、阶段和进度。
+- `POST /tasks/{taskId}/cancel`：只允许尚未开始的任务；与 consumer claim 使用 CAS 竞争。
+- `GET /tasks/events`：继续发送任务进度，并增加计划、模拟卷和答疑消息终态事件；业务结果仍以 REST/MySQL 为准。
+
+#### Plan and Chat
+
+- `POST /courses/{courseId}/plan/generate` 保留幂等键和请求体，目标态改为返回 `202 {taskId, requestId}`，不在 HTTP 请求内等待模型。
+- `GET /courses/{courseId}/plan` 继续返回唯一计划，增加 `knowledgeVersion` 和 `stale`。
+- `POST /courses/{courseId}/messages` 保存问题和后台任务，返回 `202` 的 `PENDING` 消息；分页和重试接口继续恢复最终结果。
+
+#### Mock Exam
+
+- `POST /courses/{courseId}/mock-exams`：校验并规范化表单，锁定当前知识版本，返回 `202 {mockExamId, taskId}`。
+- `GET /courses/{courseId}/mock-exams?page=&size=`：按创建时间倒序返回当前用户未删除记录和分页信息。
+- `GET /mock-exams/{mockExamId}`：返回记录摘要、原始规范化参数、错误/警告和可用操作；不向前端暴露内部 segment 来源。
+- `POST /mock-exams/{mockExamId}/retry`：接收可修改的新请求，创建关联的新记录和任务；原记录不变。
+- `DELETE /mock-exams/{mockExamId}`：只允许终态记录，设置 `deleted_at` 并登记后台对象清理。
+- `GET /mock-exams/{mockExamId}/files/{kind}/preview`：`kind=paper|answer`，ownership 校验后返回短时预签名 URL。
+- `GET /mock-exams/{mockExamId}/files/{kind}/download`：校验后返回下载地址/响应，并设置安全化的“试卷名_生成时间_试卷/参考答案.pdf”。
+
+所有模拟卷变更请求使用客户端幂等键或唯一业务约束防止重复点击；已删除、越权或课程已删除统一按不存在处理。
+
+### Knowledge Version and Retrieval Rules
+
+- 确认事务必须锁课程并再次查询所有资料状态；前端禁用不能代替服务端校验。
+- 模拟卷检索强制按 `userId + courseId + knowledgeVersion.materialIds` 过滤。整课使用完整快照；选节点时使用节点来源和针对该子树的混合检索扩展上下文。
+- 答疑检索维持 `userId + courseId + material.status=SUCCEEDED`，不受知识版本限制。
+- 提纲发布新版时不取消旧版模拟卷任务；任务从创建起只使用保存的知识版本和节点范围。
+- 计划发布继续检查知识版本/提纲和预期计划版本，任何变化都不能让旧结果覆盖当前计划。
+
+### Mock Exam Generation Pipeline
+
+1. `REQUIREMENTS_ANALYZED`：校验七类题型、逐题型题数、1–50 总题数、整数分值/1000 上限、可选 1–300 分钟时长、2000 字说明和结构化字段冲突；构造知识版本上下文。
+2. 识别真题信号时同时参考 `MaterialType.PAST_EXAM` 和内容中的历年卷结构；教师例题只从内容结构识别。用户要求优先，真题其次，例题再次，不复刻原题。
+3. `QUESTIONS_GENERATED`：LLM 只返回固定 JSON Schema。课程资料优先；允许通用知识时仅补足确实缺失的题型/题量，不联网。
+4. `PAPER_VALIDATED`：Java 校验题型数量、选项、答案完整性、分值、范围、segment ownership、通用知识标识、受支持公式命令和内部一致性。
+5. 对源真题/例题及本课程历史题做规范化相似度检查。直接复刻属于硬失败；历史近似和范围未完全覆盖记录为警告，允许发布。
+6. `PDFS_GENERATED`：从同一份已校验结构化题目渲染试卷与参考答案，防止两个文件答案漂移。
+7. 两个 PDF 都通过打开、非空、页数和对象存储校验后，事务写入对象键并标记成功；任何部分失败都删除/登记清理临时对象且不发布。
+
+### XeLaTeX Security and Layout
+
+- 只使用仓库内受版本控制的试卷/参考答案模板和允许的宏；用户、资料和模型文本必须经过 TeX 转义，不得作为命令、路径或模板片段执行。
+- 公式字段只允许经过解析校验的常见数学 LaTeX 子集；禁止文件读写、网络、shell、宏定义、包加载和动态 include 命令。
+- 以非特权用户在每任务独立临时目录运行 `xelatex -no-shell-escape`，设置编译超时、输出大小限制和进程退出校验；不把 RabbitMQ 文本直接拼成命令行。
+- 模板使用 A4、Noto CJK 字体、姓名/学号栏、题型分区、题目分值和答题空间。无输入总分/时长时不显示卷首字段。
+- PDF 不显示生成日期、知识版本或 AI 标识；通用知识题只在参考答案中标明。
+
+### Deletion and Cleanup
+
+- 单套删除先在事务中设置 `deleted_at`，对用户立即不可见；运行中记录拒绝删除，排队任务需先成功取消。
+- 对象删除采用独立、不可见的可重试清理记录/队列，不出现在全局任务列表。对象键必须确定且受 mock exam ID 隔离。
+- 管理员跨存储核对增加模拟卷白名单和孤儿 PDF 统计。课程逻辑删除后，模拟卷查询和文件授权立即失效；最终清理覆盖记录、题目、来源和两个 PDF。
+
+### Target Error Codes
+
+- `KNOWLEDGE_VERSION_MATERIALS_BUSY`、`KNOWLEDGE_VERSION_EMPTY`、`KNOWLEDGE_VERSION_UNCHANGED`、`KNOWLEDGE_VERSION_STALE`。
+- `PLAN_GENERATION_IN_PROGRESS`、`PLAN_KNOWLEDGE_VERSION_CHANGED`。
+- `MOCK_EXAM_REQUIRES_OUTLINE`、`MOCK_EXAM_GENERATION_IN_PROGRESS`、`MOCK_EXAM_REQUEST_INVALID`、`MOCK_EXAM_INSTRUCTION_CONFLICT`。
+- `MOCK_EXAM_SOURCE_INSUFFICIENT`、`MOCK_EXAM_FORMAT_INVALID`、`MOCK_EXAM_SOURCE_INVALID`、`MOCK_EXAM_FORMULA_UNSAFE`。
+- `MOCK_EXAM_PDF_FAILED`、`MOCK_EXAM_NOT_FOUND`、`MOCK_EXAM_NOT_CANCELLABLE`、`MOCK_EXAM_NOT_DELETABLE`、`MOCK_EXAM_FILE_NOT_READY`。
+
+### Target Required Tests
+
+- 资料确认时的服务端状态复查、失败资料忽略、空集合拒绝、相同集合幂等和并发确认。
+- 新旧知识版本发布、失败保留旧版、人工重要度不继承、旧版模拟卷继续完成和计划版本变化拒绝发布。
+- 活动任务跨课程查询、可见类型过滤、排队取消与 consumer claim 竞争、SSE 断线 REST 恢复。
+- 答疑离页后完成、全部成功资料立即可检索、任务不出现在抽屉、原消息重试不重复。
+- 七类题型 DTO/Schema、题数 1–50、分值汇总/1000 上限、时长 1–300、补充说明长度及冲突校验。
+- 严格资料模式失败、必要通用知识补足与参考答案标识、非法或跨版本来源拒绝。
+- 真题/例题风格信号、源题复刻拒绝、历史近似警告、知识点覆盖不足警告。
+- TeX 转义、危险命令拒绝、公式白名单、编译超时、中文/公式分页、两个 PDF 内容一致和原子发布。
+- 历史分页与 ownership、短时预览/下载、重试关联、逻辑删除立即不可见、后台清理幂等及课程级清理。
+
+上述测试已纳入 Phase 16 自动化、真实 Docker 与外部 AI 验收；实际结果见 `docs/TEST_REPORT.md`。

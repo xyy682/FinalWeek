@@ -20,12 +20,6 @@ public class OutlineController {
         var page = service.get(principal.userId(), courseId);
         return new OutlineResponse(page.outline(), page.activeTask() == null ? null : TaskView.from(page.activeTask()));
     }
-    @PostMapping("/courses/{courseId}/outline/generate")
-    @ResponseStatus(HttpStatus.ACCEPTED)
-    GenerateResponse generate(@AuthenticationPrincipal FinalWeekPrincipal principal, @PathVariable UUID courseId) {
-        var result = service.generate(principal.userId(), courseId);
-        return new GenerateResponse(TaskView.from(result.task()), !result.created());
-    }
     @PatchMapping("/outline-nodes/{nodeId}/importance")
     OutlineService.NodeView importance(@AuthenticationPrincipal FinalWeekPrincipal principal, @PathVariable UUID nodeId,
                                        @Valid @RequestBody ImportanceRequest request) {
@@ -33,5 +27,4 @@ public class OutlineController {
     }
     record ImportanceRequest(@NotNull OutlineImportance importance) {}
     record OutlineResponse(OutlineService.OutlineView outline, TaskView activeTask) {}
-    record GenerateResponse(TaskView task, boolean existing) {}
 }

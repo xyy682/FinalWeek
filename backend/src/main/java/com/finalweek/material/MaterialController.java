@@ -12,15 +12,15 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import com.finalweek.task.ParseTaskRepository;
+import com.finalweek.task.BackgroundTaskRepository;
 
 @RestController
 @RequestMapping("/api/v1")
 public class MaterialController {
     private final MaterialService service;
-    private final ParseTaskRepository tasks;
+    private final BackgroundTaskRepository tasks;
 
-    public MaterialController(MaterialService service, ParseTaskRepository tasks) { this.service = service; this.tasks = tasks; }
+    public MaterialController(MaterialService service, BackgroundTaskRepository tasks) { this.service = service; this.tasks = tasks; }
 
     @GetMapping("/courses/{courseId}/materials")
     List<MaterialResponse> list(@AuthenticationPrincipal FinalWeekPrincipal principal, @PathVariable UUID courseId) {

@@ -2,7 +2,7 @@ package com.finalweek.material;
 
 import com.finalweek.ai.AsrClient;
 import com.finalweek.ai.OcrClient;
-import com.finalweek.task.ParseTask;
+import com.finalweek.task.BackgroundTask;
 import com.finalweek.task.PermanentTaskException;
 import java.awt.Image;
 import java.awt.image.BufferedImage;
@@ -23,7 +23,7 @@ public class MediaMaterialParser implements MaterialParser {
     public MediaMaterialParser(AsrClient asr, OcrClient ocr) { this.asr = asr; this.ocr = ocr; }
     @Override public boolean supports(String mediaType) { return mediaType.equals("audio/mpeg") || mediaType.equals("video/mp4"); }
 
-    @Override public ExtractionResult extract(ParseTask task, Material material, Path source, Path workDirectory) {
+    @Override public ExtractionResult extract(BackgroundTask task, Material material, Path source, Path workDirectory) {
         boolean video = material.getMediaType().equals("video/mp4");
         long duration = probeDuration(source, workDirectory);
         if (duration <= 0 || duration > Duration.ofHours(2).toMillis()) throw new PermanentTaskException(
@@ -52,7 +52,7 @@ public class MediaMaterialParser implements MaterialParser {
         catch (NumberFormatException exception) { throw new PermanentTaskException("MEDIA_PROBE_FAILED", "无法读取音视频时长"); }
     }
 
-    private List<ExtractedUnit> extractAudio(ParseTask task, Path source, Path work, boolean video) {
+    private List<ExtractedUnit> extractAudio(BackgroundTask task, Path source, Path work, boolean video) {
         var pattern = work.resolve("audio-%03d.wav");
         ExternalProcess.run(work, Duration.ofMinutes(3), "AUDIO_EXTRACT_FAILED",
                 List.of("ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", source.toString(),
@@ -75,7 +75,7 @@ public class MediaMaterialParser implements MaterialParser {
         return result;
     }
 
-    private List<ExtractedUnit> extractFrames(ParseTask task, Path source, Path work) {
+    private List<ExtractedUnit> extractFrames(BackgroundTask task, Path source, Path work) {
         var output = ExternalProcess.run(work, Duration.ofMinutes(5), "VIDEO_FRAME_FAILED",
                 List.of("ffmpeg", "-hide_banner", "-y", "-i", source.toString(), "-vf",
                         "select='isnan(prev_selected_t)+gt(scene,0.30)+gte(t-prev_selected_t,30)',scale=1280:-2,showinfo",

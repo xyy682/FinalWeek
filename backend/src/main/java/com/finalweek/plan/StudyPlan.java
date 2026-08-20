@@ -1,6 +1,7 @@
 package com.finalweek.plan;
 
 import com.finalweek.course.Course;
+import com.finalweek.knowledgeversion.CourseKnowledgeVersion;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -13,6 +14,9 @@ public class StudyPlan {
     @Id @UuidGenerator private UUID id;
     @OneToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "course_id", nullable = false, unique = true)
     private Course course;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "knowledge_version_id", nullable = false)
+    private CourseKnowledgeVersion knowledgeVersion;
     @Column(name = "exam_date", nullable = false) private LocalDate examDate;
     @Column(name = "daily_minutes", nullable = false) private int dailyMinutes;
     @Enumerated(EnumType.STRING) @Column(name = "mastery_level", nullable = false, length = 10)
@@ -24,13 +28,15 @@ public class StudyPlan {
     protected StudyPlan() {}
     public StudyPlan(Course course) { this.course = course; }
     public void replace(LocalDate examDate, int dailyMinutes, MasteryLevel masteryLevel, int targetScore,
-                        long outlineGenerationVersion, long version) {
+                        CourseKnowledgeVersion knowledgeVersion, long outlineGenerationVersion, long version) {
         this.examDate = examDate; this.dailyMinutes = dailyMinutes; this.masteryLevel = masteryLevel;
+        this.knowledgeVersion = knowledgeVersion;
         this.targetScore = targetScore; this.outlineGenerationVersion = outlineGenerationVersion;
         this.version = version; this.generatedAt = Instant.now();
     }
     public UUID getId() { return id; }
     public UUID getCourseId() { return course.getId(); }
+    public UUID getKnowledgeVersionId() { return knowledgeVersion.getId(); }
     public LocalDate getExamDate() { return examDate; }
     public int getDailyMinutes() { return dailyMinutes; }
     public MasteryLevel getMasteryLevel() { return masteryLevel; }

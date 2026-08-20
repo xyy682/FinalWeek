@@ -5,7 +5,7 @@ import com.finalweek.knowledge.KnowledgeIndexer;
 import com.finalweek.knowledge.SemanticChunker;
 import com.finalweek.task.ExtractionCheckpointService;
 import com.finalweek.task.KnowledgeCheckpointService;
-import com.finalweek.task.ParseTask;
+import com.finalweek.task.BackgroundTask;
 import com.finalweek.task.PermanentTaskException;
 import com.finalweek.task.RetryableTaskException;
 import com.finalweek.task.TaskPipeline;
@@ -38,7 +38,7 @@ public class MaterialParsePipeline implements TaskPipeline {
         this.chunker = chunker; this.indexer = indexer; this.segments = segments;
     }
     @Override public com.finalweek.task.TaskType type() { return com.finalweek.task.TaskType.PARSE_MATERIAL; }
-    @Override public void execute(ParseTask task) {
+    @Override public void execute(BackgroundTask task) {
         boolean extractionDone = checkpoints.completed(task.getId());
         timed(task, "CONTENT_EXTRACTED", extractionDone, () -> { if (!extractionDone) extract(task); });
         var context = loadContext(task);
@@ -56,13 +56,13 @@ public class MaterialParsePipeline implements TaskPipeline {
         }});
     }
 
-    private void timed(ParseTask task, String stage, boolean skipped, Runnable action) {
+    private void timed(BackgroundTask task, String stage, boolean skipped, Runnable action) {
         long started = System.nanoTime(); action.run();
         log.info("Parse stage observed taskId={} stage={} durationMs={} skippedFromCheckpoint={}", task.getId(),
                 stage, (System.nanoTime() - started) / 1_000_000, skipped);
     }
 
-    private void extract(ParseTask task) {
+    private void extract(BackgroundTask task) {
         Path work = null;
         try {
             var material = materials.findById(task.getMaterialId()).orElseThrow(() ->
@@ -94,7 +94,7 @@ public class MaterialParsePipeline implements TaskPipeline {
         finally { if (work != null) deleteTree(work); }
     }
 
-    private CourseContext loadContext(ParseTask task) {
+    private CourseContext loadContext(BackgroundTask task) {
         try (var input = storage.get(checkpoints.contextObjectKey(task.getId()))) {
             return mapper.readValue(input, CourseContext.class);
         } catch (PermanentTaskException | RetryableTaskException exception) { throw exception; }

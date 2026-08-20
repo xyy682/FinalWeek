@@ -6,10 +6,10 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class StaleTaskScanner {
-    private final ParseTaskRepository tasks;
+    private final BackgroundTaskRepository tasks;
     private final TaskStateService states;
     private final TaskProperties properties;
-    public StaleTaskScanner(ParseTaskRepository tasks, TaskStateService states, TaskProperties properties) {
+    public StaleTaskScanner(BackgroundTaskRepository tasks, TaskStateService states, TaskProperties properties) {
         this.tasks = tasks; this.states = states; this.properties = properties;
     }
     @Scheduled(fixedDelayString = "${finalweek.task.stale-scan-interval}")

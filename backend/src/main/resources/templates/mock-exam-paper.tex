@@ -1,0 +1,29 @@
+\documentclass[12pt,a4paper]{ctexart}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+\IfFontExistsTF{Noto Serif CJK SC}{
+  \setCJKmainfont{Noto Serif CJK SC}
+  \setmainfont{Noto Serif CJK SC}
+}{
+  \setCJKmainfont[BoldFont=FandolHei-Bold.otf]{FandolSong-Regular.otf}
+  \setmainfont{TeX Gyre Termes}
+}
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{@@TITLE@@}
+\rhead{第 \thepage 页 / 共 \pageref{LastPage} 页}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.45em}
+\begin{document}
+\begin{center}
+  {\LARGE\bfseries @@TITLE@@}\par
+  \vspace{0.8em}
+  姓名：\underline{\hspace{5cm}}\hfill 学号：\underline{\hspace{5cm}}
+  @@META@@
+\end{center}
+\vspace{0.8em}
+@@BODY@@
+\end{document}

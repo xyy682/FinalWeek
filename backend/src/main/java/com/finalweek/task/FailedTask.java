@@ -8,7 +8,7 @@ import org.hibernate.annotations.UuidGenerator;
 @Entity @Table(name = "failed_task")
 public class FailedTask {
     @Id @UuidGenerator private UUID id;
-    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "task_id") private ParseTask task;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "task_id") private BackgroundTask task;
     @Column(name = "message_id", nullable = false, unique = true, length = 120) private String messageId;
     @Enumerated(EnumType.STRING) @Column(name = "failure_stage", length = 40) private TaskStage failureStage;
     @Column(name = "failure_reason", nullable = false, length = 500) private String failureReason;
@@ -17,7 +17,7 @@ public class FailedTask {
     @Column(name = "created_at", nullable = false) private Instant createdAt;
     @Column(name = "updated_at", nullable = false) private Instant updatedAt;
     protected FailedTask() {}
-    public FailedTask(ParseTask task, String messageId, String reason) {
+    public FailedTask(BackgroundTask task, String messageId, String reason) {
         this.task = task; this.messageId = messageId; this.failureStage = task.getCurrentStage();
         this.failureReason = reason; this.status = FailedTaskStatus.PENDING;
     }

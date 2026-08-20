@@ -2,6 +2,7 @@ package com.finalweek.task;
 
 import com.finalweek.common.api.BusinessException;
 import java.util.UUID;
+import com.finalweek.mockexam.MockExamRateLimiter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -12,11 +13,14 @@ public class TaskDispatchService {
     private final TaskRateLimiter rateLimiter;
     private final TaskPublisher publisher;
     private final TaskStateService states;
-    public TaskDispatchService(TaskRateLimiter rateLimiter, TaskPublisher publisher, TaskStateService states) {
+    private final MockExamRateLimiter mockExamRateLimiter;
+    public TaskDispatchService(TaskRateLimiter rateLimiter, TaskPublisher publisher, TaskStateService states,
+                               MockExamRateLimiter mockExamRateLimiter) {
         this.rateLimiter = rateLimiter; this.publisher = publisher; this.states = states;
+        this.mockExamRateLimiter = mockExamRateLimiter;
     }
 
-    public void dispatch(ParseTask task) {
+    public void dispatch(BackgroundTask task) {
         try {
             rateLimiter.acquire(task.getUserId());
             send(task);
@@ -26,7 +30,7 @@ public class TaskDispatchService {
         }
     }
 
-    public void dispatchAfterRateLimit(ParseTask task) {
+    public void dispatchAfterRateLimit(BackgroundTask task) {
         try { send(task); }
         catch (RuntimeException exception) {
             states.publishFailed(task.getId(), task.getExecutionRound(), "MQ_PUBLISH_FAILED", exception.getMessage());
@@ -34,8 +38,14 @@ public class TaskDispatchService {
         }
     }
 
-    public ParseTask republish(UUID userId, UUID taskId) {
-        rateLimiter.acquire(userId);
+    public BackgroundTask republish(UUID userId, UUID taskId) {
+        var existing = states.owned(userId, taskId);
+        switch (existing.getTaskType()) {
+            case GENERATE_PLAN -> rateLimiter.acquirePlan(userId);
+            case ANSWER_CHAT -> rateLimiter.acquireChat(userId);
+            case GENERATE_MOCK_EXAM -> mockExamRateLimiter.acquire(userId);
+            default -> rateLimiter.acquire(userId);
+        }
         var task = states.prepareRepublish(userId, taskId);
         try { send(task); }
         catch (RuntimeException exception) {
@@ -45,8 +55,18 @@ public class TaskDispatchService {
         return states.owned(userId, taskId);
     }
 
-    public ParseTask manualRetry(UUID userId, UUID taskId) {
-        rateLimiter.acquire(userId);
+    public void rejectBeforePublish(BackgroundTask task, RuntimeException exception) {
+        states.publishFailed(task.getId(), task.getExecutionRound(), code(exception), exception.getMessage());
+    }
+
+    public BackgroundTask manualRetry(UUID userId, UUID taskId) {
+        var existing = states.owned(userId, taskId);
+        switch (existing.getTaskType()) {
+            case GENERATE_PLAN -> rateLimiter.acquirePlan(userId);
+            case ANSWER_CHAT -> rateLimiter.acquireChat(userId);
+            case GENERATE_MOCK_EXAM -> mockExamRateLimiter.acquire(userId);
+            default -> rateLimiter.acquire(userId);
+        }
         var task = states.prepareManualRetry(userId, taskId);
         try { send(task); }
         catch (RuntimeException exception) {
@@ -56,7 +76,7 @@ public class TaskDispatchService {
         return states.owned(userId, taskId);
     }
 
-    private void send(ParseTask task) {
+    private void send(BackgroundTask task) {
         long started = System.nanoTime();
         publisher.publish(task);
         states.queued(task.getId(), task.getExecutionRound());

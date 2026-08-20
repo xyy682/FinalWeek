@@ -11,6 +11,7 @@ import com.finalweek.material.CourseSegmentRepository;
 import com.finalweek.material.Material;
 import com.finalweek.material.MaterialRepository;
 import com.finalweek.upload.ObjectStorage;
+import com.finalweek.mockexam.MockExamRepository;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -35,7 +36,9 @@ class AdminCleanupServiceTest {
                 UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID())));
         when(lucene.indexedCourseIds()).thenReturn(Set.of(courseId, UUID.randomUUID()));
 
-        var result = new AdminCleanupService(courses, materials, segments, storage, vectors, lucene).run(true);
+        var mockExams = mock(MockExamRepository.class); when(mockExams.findAllActiveWithFiles()).thenReturn(List.of());
+        when(storage.listKeys("users/")).thenReturn(List.of());
+        var result = new AdminCleanupService(courses, materials, segments, storage, vectors, lucene, mockExams).run(true);
 
         assertThat(result.deletedCourses()).isOne(); assertThat(result.orphanMinioObjects()).isOne();
         assertThat(result.orphanQdrantPoints()).isOne(); assertThat(result.orphanLuceneCourses()).isOne();

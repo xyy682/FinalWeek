@@ -9,10 +9,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class OutlineCheckpointService {
-    private final ParseTaskRepository tasks;
+    private final BackgroundTaskRepository tasks;
     private final TaskCheckpointRepository checkpoints;
     private final ObjectMapper mapper;
-    public OutlineCheckpointService(ParseTaskRepository tasks, TaskCheckpointRepository checkpoints, ObjectMapper mapper) {
+    public OutlineCheckpointService(BackgroundTaskRepository tasks, TaskCheckpointRepository checkpoints, ObjectMapper mapper) {
         this.tasks = tasks; this.checkpoints = checkpoints; this.mapper = mapper;
     }
     public boolean completed(UUID taskId, TaskStage stage) {

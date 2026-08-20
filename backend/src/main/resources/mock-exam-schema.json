@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["status", "missingKnowledgePoints", "questions"],
+  "properties": {
+    "status": { "enum": ["GENERATED", "INSUFFICIENT_MATERIAL"] },
+    "missingKnowledgePoints": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 500 } },
+    "questions": {
+      "type": "array", "maxItems": 50,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["questionType", "stem", "options", "answer", "score", "usesGeneralKnowledge", "sourceSegmentIds", "formulas"],
+        "properties": {
+          "questionType": { "enum": ["SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE", "FILL_BLANK", "SHORT_ANSWER", "CALCULATION", "ESSAY"] },
+          "stem": { "type": "string", "minLength": 1, "maxLength": 10000 },
+          "options": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 2000 } },
+          "answer": {
+            "type": "object", "additionalProperties": false,
+            "required": ["correctOptionIndexes", "trueFalseAnswer", "blanks", "referenceAnswer", "steps", "finalAnswer"],
+            "properties": {
+              "correctOptionIndexes": { "type": ["array", "null"], "items": { "type": "integer", "minimum": 0 } },
+              "trueFalseAnswer": { "type": ["boolean", "null"] },
+              "blanks": { "type": ["array", "null"], "items": { "type": "string" } },
+              "referenceAnswer": { "type": ["string", "null"] },
+              "steps": { "type": ["array", "null"], "items": { "type": "string" } },
+              "finalAnswer": { "type": ["string", "null"] }
+            }
+          },
+          "score": { "type": "integer", "minimum": 1, "maximum": 1000 },
+          "usesGeneralKnowledge": { "type": "boolean" },
+          "sourceSegmentIds": { "type": "array", "uniqueItems": true, "items": { "type": "string", "format": "uuid" } },
+          "formulas": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["expression", "location"], "properties": { "expression": { "type": "string", "minLength": 1, "maxLength": 500 }, "location": { "enum": ["stem", "answer"] } } } }
+        }
+      }
+    }
+  }
+}

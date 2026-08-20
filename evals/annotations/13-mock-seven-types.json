@@ -1,0 +1,1 @@
+{"coreKnowledgePoints":["事务","隔离级别","两阶段锁"],"correctSources":["d0000000-0000-0000-0000-000000000001","d0000000-0000-0000-0000-000000000002"],"expectedStatus":"GENERATED","expectedCounts":{"SINGLE_CHOICE":1,"MULTIPLE_CHOICE":1,"TRUE_FALSE":1,"FILL_BLANK":1,"SHORT_ANSWER":1,"CALCULATION":1,"ESSAY":1},"allowGeneralKnowledge":false,"forbiddenOriginalStems":[]}

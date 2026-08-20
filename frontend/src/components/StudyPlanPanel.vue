@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ApiError } from '@/api/http'
 import { getOutline } from '@/api/outline'
 import { generatePlan, getPlan, setPlanTaskCompleted, type MasteryLevel, type PlanInput, type StudyPlan } from '@/api/plan'
+import { republishTask, retryTask, type TaskEvent, type TaskProgress } from '@/api/tasks'
+import { useTaskStore } from '@/stores/tasks'
 
 const props = defineProps<{ courseId: string }>()
 const plan = ref<StudyPlan | null>(null)
@@ -13,6 +15,10 @@ const generating = ref(false)
 const retryKey = ref<string | null>(null)
 const retryBaseVersion = ref<number | null>(null)
 const errorMessage = ref('')
+const submittedTask = ref<TaskProgress | null>(null)
+const taskStore = useTaskStore()
+const activeTask = computed(() => submittedTask.value && ['PENDING_PUBLISH', 'QUEUED', 'PROCESSING', 'RETRYING'].includes(submittedTask.value.status)
+  ? submittedTask.value : taskStore.active.find(task => task.courseId === props.courseId && task.type === 'GENERATE_PLAN') ?? null)
 const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
 const form = reactive<PlanInput>({ examDate: tomorrow, dailyMinutes: 60, masteryLevel: 'MEDIUM', targetScore: 85 })
 const masteryLabels: Record<MasteryLevel, string> = { LOW: '掌握较少', MEDIUM: '掌握一般', HIGH: '掌握较好' }
@@ -64,10 +70,30 @@ async function submit(key: string) {
   generating.value = true; errorMessage.value = ''
   try {
     const result = await generatePlan(props.courseId, { ...form }, key)
-    plan.value = result.plan; retryKey.value = null; retryBaseVersion.value = null
-    ElMessage.success(result.idempotentReplay ? '已恢复此前生成结果' : '复习计划已生成')
+    submittedTask.value = result.task
+    if (result.task.status === 'FAILED') errorMessage.value = result.task.errorMessage || '计划生成失败，可重试原任务'
+    else ElMessage.success(result.idempotentReplay ? '已恢复此前后台任务' : '计划生成任务已进入队列')
   } catch (error) { showError(error, '计划生成失败'); retryKey.value = key }
   finally { generating.value = false }
+}
+async function retryFailedTask() {
+  if (!submittedTask.value) return
+  generating.value = true
+  try { submittedTask.value = await retryTask(submittedTask.value.id); errorMessage.value = ''; ElMessage.success('任务已重新排队') }
+  catch (error) { showError(error, '计划任务重试失败') } finally { generating.value = false }
+}
+async function republishFailedTask() {
+  if (!submittedTask.value) return
+  generating.value = true
+  try { submittedTask.value = await republishTask(submittedTask.value.id); errorMessage.value = ''; ElMessage.success('任务已重新发布') }
+  catch (error) { showError(error, '计划任务重新发布失败') } finally { generating.value = false }
+}
+async function onTaskUpdated(raw: Event) {
+  const event = (raw as CustomEvent<TaskEvent>).detail
+  if (event.courseId !== props.courseId || event.type !== 'GENERATE_PLAN') return
+  if (submittedTask.value?.id === event.taskId) submittedTask.value.status = event.status
+  if (event.status === 'SUCCEEDED') { await load(); retryKey.value = null; submittedTask.value = null }
+  if (event.status === 'FAILED' || event.status === 'PUBLISH_FAILED') errorMessage.value = event.message || '计划生成失败，可重试原任务'
 }
 
 async function toggle(task: StudyPlan['tasks'][number], value: boolean) {
@@ -80,7 +106,8 @@ function showError(error: unknown, fallback: string) {
     errorMessage.value = error.status === 429 ? '生成过于频繁，请稍后使用同一请求重试' : `${error.body.message}（${error.body.requestId}）`
   } else errorMessage.value = fallback
 }
-onMounted(load)
+onMounted(() => { void load(); window.addEventListener('fw:task-updated', onTaskUpdated) })
+onBeforeUnmount(() => window.removeEventListener('fw:task-updated', onTaskUpdated))
 </script>
 
 <template>
@@ -88,12 +115,14 @@ onMounted(load)
     <div class="section-heading"><div><h2>复习计划</h2><p>根据当前提纲安排考试前的每日知识点任务</p></div></div>
     <el-alert v-if="!hasOutline" title="还没有知识提纲，请先生成提纲后再制定计划。" type="info" show-icon :closable="false" />
     <el-alert v-if="errorMessage" :title="errorMessage" type="error" show-icon :closable="false" />
+    <el-alert v-if="plan?.stale" title="当前计划基于旧知识版本；你仍可继续查看和勾选，重新生成后才会替换。" type="warning" show-icon :closable="false" />
+    <el-alert v-if="activeTask" title="计划正在后台生成；当前计划会保留到新结果成功发布。" type="info" show-icon :closable="false" />
     <el-form class="plan-form" label-position="top" :model="form">
       <el-form-item label="考试日期"><el-date-picker v-model="form.examDate" type="date" value-format="YYYY-MM-DD" :disabled-date="(date: Date) => date.getTime() < Date.now()" /></el-form-item>
       <el-form-item label="每日可用分钟数"><el-input-number v-model="form.dailyMinutes" :min="1" :max="1440" /></el-form-item>
       <el-form-item label="整体掌握程度"><el-select v-model="form.masteryLevel"><el-option v-for="(label, value) in masteryLabels" :key="value" :label="label" :value="value" /></el-select></el-form-item>
       <el-form-item label="目标成绩"><el-input-number v-model="form.targetScore" :min="1" :max="100" /></el-form-item>
-      <div class="actions"><el-button type="primary" :loading="generating" :disabled="!hasOutline" @click="confirmGenerate">{{ plan ? '重新生成' : '生成计划' }}</el-button><el-button v-if="retryKey" :loading="generating" @click="retrySameRequest">刷新并重试原请求</el-button></div>
+      <div class="actions"><el-button type="primary" :loading="generating" :disabled="!hasOutline || !!activeTask" @click="confirmGenerate">{{ plan ? '重新生成' : '生成计划' }}</el-button><el-button v-if="submittedTask?.status === 'FAILED'" :loading="generating" @click="retryFailedTask">重试原任务</el-button><el-button v-else-if="submittedTask?.status === 'PUBLISH_FAILED'" :loading="generating" @click="republishFailedTask">重新发布任务</el-button><el-button v-else-if="retryKey && !activeTask" :loading="generating" @click="retrySameRequest">恢复原请求</el-button></div>
     </el-form>
     <div v-if="plan" class="summary">版本 {{ plan.version }} · 考试 {{ plan.examDate }} · 每日 {{ plan.dailyMinutes }} 分钟 · 目标 {{ plan.targetScore }} 分</div>
     <div v-if="plan" class="days">

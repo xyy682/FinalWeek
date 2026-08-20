@@ -15,9 +15,6 @@ export interface Outline {
 }
 export interface OutlinePage { outline: Outline | null; activeTask: TaskProgress | null }
 export const getOutline = (courseId: string) => apiFetch<OutlinePage>(`/courses/${courseId}/outline`)
-export const generateOutline = (courseId: string) => apiFetch<{ task: TaskProgress; existing: boolean }>(
-  `/courses/${courseId}/outline/generate`, { method: 'POST' },
-)
 export const updateOutlineImportance = (nodeId: string, importance: OutlineImportance) =>
   apiFetch<OutlineNode>(`/outline-nodes/${nodeId}/importance`, {
     method: 'PATCH', body: JSON.stringify({ importance }),

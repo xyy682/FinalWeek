@@ -12,6 +12,8 @@ export interface PlanTask {
 }
 export interface StudyPlan {
   id: string
+  knowledgeVersionId: string
+  stale: boolean
   examDate: string
   dailyMinutes: number
   masteryLevel: MasteryLevel
@@ -32,7 +34,7 @@ export async function getPlan(courseId: string): Promise<StudyPlan | null> {
   return (await apiFetch<{ plan: StudyPlan | null }>(`/courses/${courseId}/plan`)).plan
 }
 export async function generatePlan(courseId: string, input: PlanInput, key: string) {
-  return apiFetch<{ plan: StudyPlan; idempotentReplay: boolean }>(`/courses/${courseId}/plan/generate`, {
+  return apiFetch<{ taskId: string; requestId: string; task: import('./tasks').TaskProgress; idempotentReplay: boolean }>(`/courses/${courseId}/plan/generate`, {
     method: 'POST', headers: { 'Idempotency-Key': key }, body: JSON.stringify(input),
   })
 }

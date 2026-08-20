@@ -14,7 +14,7 @@ import org.springframework.amqp.core.MessageProperties;
 
 class TaskConsumerTest {
     @Test void duplicateCancelledOrOldRoundMessageIsAcknowledgedWithoutRunningPipeline() throws Exception {
-        var states = mock(TaskStateService.class); var tasks = mock(ParseTaskRepository.class);
+        var states = mock(TaskStateService.class); var tasks = mock(BackgroundTaskRepository.class);
         var pipeline = mock(TaskPipeline.class); var redisson = mock(RedissonClient.class);
         var properties = new TaskProperties("exchange", "parse", "queue", "dlx", "dlq",
                 Duration.ofSeconds(5), Duration.ofSeconds(30), Duration.ofSeconds(30), Duration.ofHours(24), 3);
@@ -32,9 +32,9 @@ class TaskConsumerTest {
     }
 
     @Test void retryableFailureRequeuesWithinBudgetAndRejectsAtBudgetLimit() throws Exception {
-        var states = mock(TaskStateService.class); var tasks = mock(ParseTaskRepository.class);
+        var states = mock(TaskStateService.class); var tasks = mock(BackgroundTaskRepository.class);
         var pipeline = mock(TaskPipeline.class); var redisson = mock(RedissonClient.class);
-        var lock = mock(RLock.class); var task = mock(ParseTask.class); var channel = mock(Channel.class);
+        var lock = mock(RLock.class); var task = mock(BackgroundTask.class); var channel = mock(Channel.class);
         var properties = new TaskProperties("exchange", "parse", "queue", "dlx", "dlq",
                 Duration.ofSeconds(5), Duration.ofSeconds(30), Duration.ofSeconds(30), Duration.ofHours(24), 3);
         var consumer = new TaskConsumer(states, tasks, java.util.List.of(pipeline), properties, redisson);

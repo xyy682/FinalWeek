@@ -6,7 +6,7 @@ import com.finalweek.course.CourseService;
 import com.finalweek.material.Material;
 import com.finalweek.material.MaterialService;
 import com.finalweek.material.MaterialType;
-import com.finalweek.task.ParseTask;
+import com.finalweek.task.BackgroundTask;
 import com.finalweek.task.TaskDispatchService;
 import java.io.IOException;
 import java.io.InputStream;
@@ -174,7 +174,7 @@ public class UploadService {
     }
 
     private CompleteResult existingResult(Material material, boolean duplicate) {
-        ParseTask task = finalizer.taskFor(material).orElseThrow(() ->
+        BackgroundTask task = finalizer.taskFor(material).orElseThrow(() ->
                 new IllegalStateException("资料缺少解析任务: " + material.getId()));
         return new CompleteResult(material, task, duplicate);
     }
@@ -199,5 +199,5 @@ public class UploadService {
     static String chunkKey(UUID uploadId, int index) { return "uploads/" + uploadId + "/chunks/" + index; }
     public record UploadStatus(UUID uploadId, String status, java.util.List<Integer> uploadedChunks,
                                UUID materialId, Instant expiresAt) {}
-    public record CompleteResult(Material material, ParseTask task, boolean duplicate) {}
+    public record CompleteResult(Material material, BackgroundTask task, boolean duplicate) {}
 }

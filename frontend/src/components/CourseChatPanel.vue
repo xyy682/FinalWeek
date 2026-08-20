@@ -1,17 +1,17 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ApiError } from '@/api/http'
 import { askQuestion, getMessages, retryQuestion, type ChatMessage, type ChatSource } from '@/api/chat'
 import { getMaterialPreview, getSourceSegment, listMaterials, type Material, type MaterialPreview, type SourceSegment } from '@/api/materials'
 import SafeMarkdown from './SafeMarkdown.vue'
+import type { TaskEvent } from '@/api/tasks'
 
 const props = defineProps<{ courseId: string }>()
 const messages = ref<ChatMessage[]>([]); const nextCursor = ref<string | null>(null)
 const materials = ref<Material[]>([]); const question = ref(''); const loading = ref(true); const sending = ref(false)
 const drawerOpen = ref(false); const sourceLoading = ref(false); const selectedSegment = ref<SourceSegment | null>(null)
 const selectedPreview = ref<MaterialPreview | null>(null); const media = ref<HTMLMediaElement | null>(null)
-let controller: AbortController | null = null
 const selectedMaterial = computed(() => materials.value.find(value => value.id === selectedSegment.value?.materialId) ?? null)
 const hasKnowledge = computed(() => materials.value.some(value => value.status === 'SUCCEEDED'))
 
@@ -31,18 +31,21 @@ async function loadOlder() {
 async function send() {
   const value = question.value.trim(); if (!value || sending.value) return
   if (!hasKnowledge.value) { ElMessage.warning('至少需要一份解析成功的课程资料才能提问'); return }
-  sending.value = true; controller = new AbortController()
-  try { await askQuestion(props.courseId, value, controller.signal); question.value = ''; await loadLatest() }
+  sending.value = true
+  try { await askQuestion(props.courseId, value); question.value = ''; await loadLatest(); ElMessage.success('问题已提交，可离开页面等待通知') }
   catch (error) { ElMessage.error(describe(error)); await loadLatest().catch(() => undefined) }
-  finally { sending.value = false; controller = null }
+  finally { sending.value = false }
 }
 async function retry(message: ChatMessage) {
-  if (sending.value) return; sending.value = true; controller = new AbortController()
-  try { await retryQuestion(message.id, controller.signal); await loadLatest() }
+  if (sending.value) return; sending.value = true
+  try { await retryQuestion(message.id); await loadLatest(); ElMessage.success('原问题已重新排队') }
   catch (error) { ElMessage.error(describe(error)); await loadLatest().catch(() => undefined) }
-  finally { sending.value = false; controller = null }
+  finally { sending.value = false }
 }
-function cancelWait() { controller?.abort() }
+function onTaskUpdated(raw: Event) {
+  const event = (raw as CustomEvent<TaskEvent>).detail
+  if (event.courseId === props.courseId && event.type === 'ANSWER_CHAT') void loadLatest()
+}
 function sourceLabel(source: ChatSource | SourceSegment) {
   if (source.pageNumber) return `第 ${source.pageNumber} 页`; if (source.slideNumber) return `第 ${source.slideNumber} 张幻灯片`
   if (source.paragraphNumber) return `第 ${source.paragraphNumber} 段`; if (source.startTimeMs != null) return `${Math.floor(source.startTimeMs / 60000)}:${String(Math.floor(source.startTimeMs / 1000) % 60).padStart(2, '0')}`
@@ -53,7 +56,8 @@ async function openSource(source: ChatSource) {
   try { selectedSegment.value = await getSourceSegment(source.segmentId); selectedPreview.value = await getMaterialPreview(selectedSegment.value.materialId); await nextTick(); if (media.value && selectedSegment.value.startTimeMs != null) media.value.currentTime = selectedSegment.value.startTimeMs / 1000 }
   catch (error) { ElMessage.error(describe(error)) } finally { sourceLoading.value = false }
 }
-onMounted(async () => { try { [materials.value] = await Promise.all([listMaterials(props.courseId), loadLatest()]) } catch (error) { ElMessage.error(describe(error)) } finally { loading.value = false } })
+onMounted(async () => { window.addEventListener('fw:task-updated', onTaskUpdated); try { [materials.value] = await Promise.all([listMaterials(props.courseId), loadLatest()]) } catch (error) { ElMessage.error(describe(error)) } finally { loading.value = false } })
+onBeforeUnmount(() => window.removeEventListener('fw:task-updated', onTaskUpdated))
 </script>
 
 <template>
@@ -70,7 +74,7 @@ onMounted(async () => { try { [materials.value] = await Promise.all([listMateria
         <div v-if="message.role === 'USER' && message.status === 'FAILED'" class="failed"><span>发送失败 · {{ message.errorCode }}</span><el-button link type="primary" :disabled="sending" @click="retry(message)">重试原问题</el-button></div>
       </article>
     </div>
-    <div class="composer"><el-input v-model="question" type="textarea" :rows="3" maxlength="2000" show-word-limit :disabled="!hasKnowledge" :placeholder="hasKnowledge ? '输入课程相关问题（仅文字）' : '请先上传并成功解析课程资料'" @keydown.ctrl.enter.prevent="send" /><div><span>Ctrl + Enter 发送</span><el-button v-if="sending" @click="cancelWait">取消等待</el-button><el-button type="primary" :loading="sending" :disabled="!hasKnowledge || !question.trim()" @click="send">发送</el-button></div></div>
+    <div class="composer"><el-input v-model="question" type="textarea" :rows="3" maxlength="2000" show-word-limit :disabled="!hasKnowledge" :placeholder="hasKnowledge ? '输入课程相关问题（仅文字）' : '请先上传并成功解析课程资料'" @keydown.ctrl.enter.prevent="send" /><div><span>Ctrl + Enter 发送；离开页面不会取消回答</span><el-button type="primary" :loading="sending" :disabled="!hasKnowledge || !question.trim()" @click="send">发送</el-button></div></div>
   </section>
   <el-drawer v-model="drawerOpen" title="课程资料来源" size="min(560px, 92vw)"><div v-loading="sourceLoading" class="source-drawer"><template v-if="selectedSegment"><h3>{{ selectedMaterial?.originalFilename ?? '课程资料' }}</h3><p>{{ sourceLabel(selectedSegment) }}</p><blockquote>{{ selectedSegment.content }}</blockquote><iframe v-if="selectedPreview?.normalizedPdf" :src="`${selectedPreview.url}#page=${selectedSegment.pageNumber ?? selectedSegment.slideNumber ?? 1}`" title="来源 PDF 预览" /><audio v-else-if="selectedPreview?.mediaType === 'audio/mpeg'" ref="media" controls :src="selectedPreview.url" /><video v-else-if="selectedPreview?.mediaType === 'video/mp4'" ref="media" controls :src="selectedPreview.url" /><el-button v-else-if="selectedPreview" tag="a" :href="selectedPreview.url" target="_blank" rel="noopener noreferrer">打开原资料</el-button></template></div></el-drawer>
 </template>

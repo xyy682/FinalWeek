@@ -1,0 +1,25 @@
+\documentclass[11pt,a4paper]{ctexart}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+\usepackage{xcolor}
+\IfFontExistsTF{Noto Serif CJK SC}{
+  \setCJKmainfont{Noto Serif CJK SC}
+  \setmainfont{Noto Serif CJK SC}
+}{
+  \setCJKmainfont[BoldFont=FandolHei-Bold.otf]{FandolSong-Regular.otf}
+  \setmainfont{TeX Gyre Termes}
+}
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{@@TITLE@@ - 参考答案}
+\rhead{第 \thepage 页 / 共 \pageref{LastPage} 页}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.5em}
+\begin{document}
+\begin{center}{\LARGE\bfseries @@TITLE@@ - 参考答案}\end{center}
+\vspace{0.8em}
+@@BODY@@
+\end{document}

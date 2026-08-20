@@ -13,7 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-import com.finalweek.task.ParseTaskRepository;
+import com.finalweek.task.BackgroundTaskRepository;
 
 @Service
 public class MaterialService {
@@ -21,12 +21,12 @@ public class MaterialService {
     private final MaterialRepository repository;
     private final CourseService courseService;
     private final ObjectStorage storage;
-    private final ParseTaskRepository tasks;
+    private final BackgroundTaskRepository tasks;
     private final CourseSegmentRepository segments;
     private final KnowledgeCleanupService knowledge;
 
     public MaterialService(MaterialRepository repository, CourseService courseService, ObjectStorage storage,
-                           ParseTaskRepository tasks, CourseSegmentRepository segments,
+                           BackgroundTaskRepository tasks, CourseSegmentRepository segments,
                            KnowledgeCleanupService knowledge) {
         this.repository = repository;
         this.courseService = courseService;

@@ -12,9 +12,9 @@ async function mailCode(request: APIRequestContext, email: string): Promise<stri
   return text.match(/验证码是：?(\d{6})/)?.[1] ?? null
 }
 
-test('login → course → upload → parse → outline → plan → chat', async ({ page, request }, testInfo) => {
+test('login → knowledge version → async plan/chat → mock exam PDFs', async ({ page, request }, testInfo) => {
   test.skip(testInfo.project.name !== 'chromium', 'The expensive real-AI journey runs once in desktop Chromium.')
-  test.setTimeout(8 * 60 * 1000)
+  test.setTimeout(12 * 60 * 1000)
   const identity = Date.now()
   const email = `playwright-${identity}@example.com`
   const courseName = `E2E 课程 ${identity}`
@@ -40,38 +40,90 @@ test('login → course → upload → parse → outline → plan → chat', asyn
     '公式为 F=ma。教师强调这是考试重点，需要掌握力、质量和加速度的关系。',
     '等容过程体积不变，边界功为零。',
   ].join('\n\n')
-  await page.locator('input[type=file]').setInputFiles({ name: `e2e-${identity}.txt`, mimeType: 'text/plain', buffer: Buffer.from(material) })
-  await page.getByRole('button', { name: '开始上传' }).click()
-  await expect(page.getByText(`e2e-${identity}.txt`).first()).toBeVisible()
-
+  const materials = [
+    { name: `e2e-courseware-${identity}.txt`, content: material },
+    { name: `e2e-notes-${identity}.md`, content: '课堂例题：质量为 2 kg 的物体受到 6 N 合力时，加速度为 3 m/s²。\n\n热力学第一定律是 ΔU=Q-W。' },
+  ]
   const courseId = new URL(page.url()).pathname.split('/')[2]
+  for (const value of materials) {
+    await page.locator('input[type=file]').setInputFiles({ name: value.name, mimeType: 'text/plain', buffer: Buffer.from(value.content) })
+    await page.getByRole('button', { name: '开始上传' }).click()
+    await expect(page.getByText(value.name).first()).toBeVisible()
+    await expect.poll(async () => {
+      const response = await page.request.get(`/api/v1/courses/${courseId}/materials`)
+      const values = await response.json() as Array<{ originalFilename: string; status: string }>
+      return values.find(material => material.originalFilename === value.name)?.status
+    }, { timeout: 180_000, intervals: [1_000, 2_000, 5_000] }).toBe('SUCCEEDED')
+  }
+
   await expect.poll(async () => {
     const response = await page.request.get(`/api/v1/courses/${courseId}/materials`)
     const values = await response.json() as Array<{ status: string }>
-    return values[0]?.status
-  }, { timeout: 180_000, intervals: [1_000, 2_000, 5_000] }).toBe('SUCCEEDED')
+    return values.length === materials.length && values.every(value => value.status === 'SUCCEEDED')
+  }, { timeout: 180_000, intervals: [1_000, 2_000, 5_000] }).toBe(true)
   await page.reload()
-  await expect(page.getByText('解析成功').first()).toBeVisible()
+  await expect(page.locator('.desktop-table').getByText('解析成功')).toHaveCount(materials.length)
   await expect(page.getByText('正在重新连接').first()).toBeVisible()
+  await page.getByRole('button', { name: '资料已上传完毕' }).click()
 
   await page.getByRole('link', { name: '知识提纲' }).click()
-  await page.getByRole('button', { name: '生成提纲' }).first().click()
-  await expect(page.getByText(/第 \d+ 版/)).toBeVisible({ timeout: 240_000 })
+  await expect.poll(async () => {
+    const response = await page.request.get(`/api/v1/courses/${courseId}/knowledge-version`)
+    return (await response.json() as { current?: { status?: string } }).current?.status
+  }, { timeout: 240_000, intervals: [2_000, 5_000] }).toBe('PUBLISHED')
+  await page.reload()
   await expect(page.getByRole('button', { name: /来源/ }).first()).toBeVisible()
 
   await page.getByRole('link', { name: '复习计划' }).click()
   await page.getByRole('button', { name: '生成计划' }).click()
-  await expect(page.getByText(/版本 \d+ · 考试/)).toBeVisible({ timeout: 120_000 })
+  await expect.poll(async () => {
+    const response = await page.request.get(`/api/v1/courses/${courseId}/plan`)
+    return (await response.json() as { plan?: { version?: number } }).plan?.version
+  }, { timeout: 150_000, intervals: [2_000, 5_000] }).toBeGreaterThan(0)
+  await page.reload()
   await expect(page.locator('.plan-task').first()).toBeVisible()
 
   await page.getByRole('link', { name: '课程问答' }).click()
   await page.getByPlaceholder('输入课程相关问题（仅文字）').fill('牛顿第二定律的公式是什么？')
   await page.getByRole('button', { name: '发送' }).click()
-  await expect(page.locator('.message.assistant')).toContainText('F', { timeout: 120_000 })
+  await page.getByRole('link', { name: '资料', exact: true }).click()
+  await page.getByRole('link', { name: '课程问答' }).click()
+  await expect.poll(async () => {
+    const response = await page.request.get(`/api/v1/courses/${courseId}/messages`)
+    const values = (await response.json() as { messages: Array<{ role: string; status: string }> }).messages
+    return values.some(value => value.role === 'ASSISTANT' && value.status === 'SUCCEEDED')
+  }, { timeout: 150_000, intervals: [2_000, 5_000] }).toBe(true)
+  await page.reload()
+  await expect(page.locator('.message.assistant')).toContainText('F')
   await expect(page.locator('.message.assistant').getByText('课程资料来源', { exact: true })).toBeVisible()
   await page.locator('.message.assistant .sources button').first().click()
-  await expect(page.getByRole('heading', { name: `e2e-${identity}.txt` })).toBeVisible()
-  await page.screenshot({ path: '../docs/images/finalweek-course-chat.png', fullPage: true })
+  await expect(page.getByRole('heading', { name: materials[0].name })).toBeVisible()
+  await page.keyboard.press('Escape')
+
+  await page.getByRole('link', { name: '模拟卷' }).click()
+  const singleChoice = page.locator('.type-grid article').filter({ hasText: '单选题' })
+  await expect(singleChoice.getByRole('checkbox', { name: '单选题' })).toBeChecked({ timeout: 30_000 })
+  for (let count = 10; count > 2; count -= 1) await singleChoice.getByRole('button', { name: 'decrease number' }).click()
+  await expect(singleChoice.getByRole('spinbutton')).toHaveValue('2')
+  await page.getByRole('button', { name: '生成模拟卷' }).click()
+  await expect.poll(async () => {
+    const response = await page.request.get(`/api/v1/courses/${courseId}/mock-exams?page=0&size=10`)
+    const values = (await response.json() as { items: Array<{ id: string; status: string }> }).items
+    return values[0]?.status
+  }, { timeout: 300_000, intervals: [2_000, 5_000] }).toBe('SUCCEEDED')
+  await page.reload()
+  await expect(page.getByRole('button', { name: '预览试卷' }).first()).toBeVisible()
+  await expect(page.getByRole('button', { name: '下载答案' }).first()).toBeVisible()
+  const history = await (await page.request.get(`/api/v1/courses/${courseId}/mock-exams?page=0&size=10`)).json() as { items: Array<{ id: string }> }
+  const examId = history.items[0].id
+  for (const kind of ['paper', 'answer'] as const) {
+    const preview = await page.request.get(`/api/v1/mock-exams/${examId}/files/${kind}/preview`)
+    expect(preview.ok()).toBeTruthy(); expect((await preview.json() as { url: string }).url).toMatch(/^https?:/)
+    const download = await page.request.get(`/api/v1/mock-exams/${examId}/files/${kind}/download`)
+    expect(download.ok()).toBeTruthy(); expect(download.headers()['content-type']).toContain('application/pdf')
+    expect((await download.body()).length).toBeGreaterThan(1000)
+  }
+  await page.screenshot({ path: '../docs/images/finalweek-mock-exams.png', fullPage: true })
 })
 
 test('mobile layout keeps the primary journey usable', async ({ page }, testInfo) => {

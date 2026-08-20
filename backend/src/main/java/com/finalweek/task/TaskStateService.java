@@ -3,6 +3,12 @@ package com.finalweek.task;
 import com.finalweek.common.api.BusinessException;
 import com.finalweek.material.MaterialRepository;
 import com.finalweek.material.MaterialStatus;
+import com.finalweek.knowledgeversion.CourseKnowledgeVersionRepository;
+import com.finalweek.course.CourseRepository;
+import com.finalweek.plan.PlanRequestCoordinator;
+import com.finalweek.chat.ChatCoordinator;
+import com.finalweek.mockexam.MockExamCoordinator;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -10,23 +16,41 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class TaskStateService {
-    private final ParseTaskRepository tasks;
+    private final BackgroundTaskRepository tasks;
     private final MaterialRepository materials;
     private final FailedTaskRepository failedTasks;
     private final TaskCheckpointRepository checkpoints;
     private final TaskProgressService progress;
+    private final CourseKnowledgeVersionRepository knowledgeVersions;
+    private final CourseRepository courses;
+    private final PlanRequestCoordinator planRequests;
+    private final ChatCoordinator chats;
+    private final MockExamCoordinator mockExams;
 
-    public TaskStateService(ParseTaskRepository tasks, MaterialRepository materials,
+    public TaskStateService(BackgroundTaskRepository tasks, MaterialRepository materials,
                             FailedTaskRepository failedTasks, TaskCheckpointRepository checkpoints,
-                            TaskProgressService progress) {
+                            TaskProgressService progress, CourseKnowledgeVersionRepository knowledgeVersions,
+                            CourseRepository courses, PlanRequestCoordinator planRequests, ChatCoordinator chats,
+                            MockExamCoordinator mockExams) {
         this.tasks = tasks; this.materials = materials; this.failedTasks = failedTasks;
         this.checkpoints = checkpoints; this.progress = progress;
+        this.knowledgeVersions = knowledgeVersions; this.courses = courses;
+        this.planRequests = planRequests; this.chats = chats;
+        this.mockExams = mockExams;
     }
 
     @Transactional(readOnly = true)
-    public ParseTask owned(UUID userId, UUID taskId) {
+    public BackgroundTask owned(UUID userId, UUID taskId) {
         return tasks.findByIdAndUserId(taskId, userId).orElseThrow(() -> new BusinessException(
                 HttpStatus.NOT_FOUND, "TASK_NOT_FOUND", "任务不存在或无权访问"));
+    }
+
+    @Transactional(readOnly = true)
+    public TaskProgressService.TaskView view(UUID userId, UUID taskId) {
+        var task = owned(userId, taskId);
+        var courseName = courses.findById(task.getCourseId()).map(com.finalweek.course.Course::getName)
+                .orElse("已删除课程");
+        return TaskProgressService.TaskView.from(task, courseName);
     }
 
     @Transactional
@@ -34,7 +58,11 @@ public class TaskStateService {
 
     @Transactional
     public boolean publishFailed(UUID id, int round, String code, String message) {
-        return changed(tasks.markPublishFailed(id, round, code, truncate(message)), id, MaterialStatus.PUBLISH_FAILED);
+        if (tasks.markPublishFailed(id, round, code, truncate(message)) != 1) return false;
+        var task = refresh(id, MaterialStatus.PUBLISH_FAILED);
+        if (task.getTaskType() == TaskType.ANSWER_CHAT)
+            chats.fail(task.getUserId(), task.getBusinessId(), code);
+        return true;
     }
 
     @Transactional
@@ -54,6 +82,11 @@ public class TaskStateService {
             if (task.getTaskType() == TaskType.PARSE_MATERIAL) {
                 materials.updateStatus(task.getMaterialId(), MaterialStatus.FAILED);
             }
+            if (task.getTaskType() == TaskType.GENERATE_OUTLINE)
+                knowledgeVersions.findById(task.getBusinessId()).ifPresent(version -> version.fail(code));
+            if (task.getTaskType() == TaskType.GENERATE_PLAN) planRequests.fail(task.getBusinessId(), code);
+            if (task.getTaskType() == TaskType.ANSWER_CHAT) chats.fail(task.getUserId(), task.getBusinessId(), code);
+            if (task.getTaskType() == TaskType.GENERATE_MOCK_EXAM) mockExams.fail(task.getBusinessId(), code, truncate(message));
             if (failedTasks.findByMessageId(messageId).isEmpty()) failedTasks.save(new FailedTask(task, messageId, truncate(message)));
             progress.publish(task);
         }
@@ -69,43 +102,73 @@ public class TaskStateService {
         if (task.getTaskType() == TaskType.PARSE_MATERIAL) {
             materials.updateStatus(task.getMaterialId(), MaterialStatus.SUCCEEDED);
         }
+        if (task.getTaskType() == TaskType.GENERATE_MOCK_EXAM) mockExams.state(task.getBusinessId(), TaskStatus.SUCCEEDED);
         failedTasks.findTopByTask_IdOrderByCreatedAtDesc(id).ifPresent(FailedTask::markResolved);
         progress.publish(task);
     }
 
     @Transactional
-    public ParseTask cancel(UUID userId, UUID id) {
+    public BackgroundTask cancel(UUID userId, UUID id) {
         owned(userId, id);
-        if (tasks.cancelUnstarted(id) != 1) throw new BusinessException(HttpStatus.CONFLICT,
-                "TASK_NOT_CANCELLABLE", "仅未开始的任务可以取消");
-        return refresh(id, MaterialStatus.CANCELLED);
+        if (tasks.cancelQueued(id) != 1) throw new BusinessException(HttpStatus.CONFLICT,
+                "TASK_NOT_CANCELLABLE", "仅排队中的任务可以取消");
+        var task = refresh(id, MaterialStatus.CANCELLED);
+        if (task.getTaskType() == TaskType.GENERATE_OUTLINE)
+            knowledgeVersions.findById(task.getBusinessId()).ifPresent(version -> version.fail("TASK_CANCELLED"));
+        if (task.getTaskType() == TaskType.GENERATE_PLAN) planRequests.fail(task.getBusinessId(), "TASK_CANCELLED");
+        if (task.getTaskType() == TaskType.ANSWER_CHAT)
+            chats.fail(task.getUserId(), task.getBusinessId(), "TASK_CANCELLED");
+        if (task.getTaskType() == TaskType.GENERATE_MOCK_EXAM) mockExams.state(task.getBusinessId(), TaskStatus.CANCELLED);
+        return task;
     }
 
     @Transactional
-    public ParseTask prepareRepublish(UUID userId, UUID id) {
-        owned(userId, id);
+    public BackgroundTask prepareRepublish(UUID userId, UUID id) {
+        var existing = owned(userId, id);
         if (tasks.prepareRepublish(id) != 1) throw new BusinessException(HttpStatus.CONFLICT,
                 "TASK_NOT_REPUBLISHABLE", "仅发布失败的任务可以重新发布");
+        if (existing.getTaskType() == TaskType.ANSWER_CHAT)
+            chats.retryForTask(existing.getUserId(), existing.getBusinessId());
         return refresh(id, MaterialStatus.PENDING_PUBLISH);
     }
 
     @Transactional
-    public ParseTask prepareManualRetry(UUID userId, UUID id) {
-        owned(userId, id);
+    public BackgroundTask prepareManualRetry(UUID userId, UUID id) {
+        var existing = owned(userId, id);
+        if (existing.getTaskType() == TaskType.GENERATE_MOCK_EXAM) throw new BusinessException(HttpStatus.CONFLICT,
+                "MOCK_EXAM_RETRY_REQUIRES_NEW_RECORD", "模拟卷重试必须保留原记录并创建新的关联记录");
         if (tasks.prepareManualRetry(id) != 1) throw new BusinessException(HttpStatus.CONFLICT,
                 "TASK_NOT_RETRYABLE", "仅执行失败的任务可以人工重试");
         failedTasks.findTopByTask_IdOrderByCreatedAtDesc(id).ifPresent(FailedTask::markRedelivered);
+        if (existing.getTaskType() == TaskType.GENERATE_OUTLINE)
+            knowledgeVersions.findById(existing.getBusinessId()).ifPresent(version -> version.retry());
+        if (existing.getTaskType() == TaskType.GENERATE_PLAN) planRequests.retry(existing.getBusinessId());
+        if (existing.getTaskType() == TaskType.ANSWER_CHAT)
+            chats.retryForTask(existing.getUserId(), existing.getBusinessId());
         return refresh(id, MaterialStatus.PENDING_PUBLISH);
+    }
+
+    @Transactional(readOnly = true)
+    public List<TaskProgressService.TaskView> active(UUID userId) {
+        var active = List.of(TaskStatus.PENDING_PUBLISH, TaskStatus.PUBLISH_FAILED, TaskStatus.QUEUED,
+                TaskStatus.PROCESSING, TaskStatus.RETRYING);
+        return tasks.findAllByUserIdAndVisibleInGlobalDrawerTrueAndStatusInOrderByUpdatedAtDesc(userId, active).stream()
+                .map(task -> TaskProgressService.TaskView.from(task, courses.findById(task.getCourseId())
+                        .map(com.finalweek.course.Course::getName).orElse("已删除课程"))).toList();
     }
 
     private boolean changed(int count, UUID id, MaterialStatus status) {
         if (count != 1) return false;
         refresh(id, status); return true;
     }
-    private ParseTask refresh(UUID id, MaterialStatus status) {
+    private BackgroundTask refresh(UUID id, MaterialStatus status) {
         var task = tasks.findById(id).orElseThrow();
         if (task.getTaskType() == TaskType.PARSE_MATERIAL && task.getMaterialId() != null) {
             materials.updateStatus(task.getMaterialId(), status);
+        }
+        if (task.getTaskType() == TaskType.GENERATE_MOCK_EXAM) {
+            var mapped = TaskStatus.valueOf(status.name());
+            mockExams.state(task.getBusinessId(), mapped);
         }
         progress.publish(task);
         return task;

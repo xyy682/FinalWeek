@@ -7,6 +7,7 @@ import com.finalweek.material.CourseSegment;
 import com.finalweek.material.CourseSegmentRepository;
 import com.finalweek.material.MaterialRepository;
 import com.finalweek.upload.ObjectStorage;
+import com.finalweek.mockexam.MockExamRepository;
 import java.util.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,11 +17,13 @@ public class AdminCleanupService {
     private final CourseRepository courses; private final MaterialRepository materials;
     private final CourseSegmentRepository segments; private final ObjectStorage storage;
     private final QdrantVectorStore vectors; private final LuceneCourseIndex lucene;
+    private final MockExamRepository mockExams;
     public AdminCleanupService(CourseRepository courses, MaterialRepository materials,
                                CourseSegmentRepository segments, ObjectStorage storage,
-                               QdrantVectorStore vectors, LuceneCourseIndex lucene) {
+                               QdrantVectorStore vectors, LuceneCourseIndex lucene, MockExamRepository mockExams) {
         this.courses = courses; this.materials = materials; this.segments = segments;
         this.storage = storage; this.vectors = vectors; this.lucene = lucene;
+        this.mockExams = mockExams;
     }
 
     @Transactional(readOnly = true)
@@ -36,6 +39,12 @@ public class AdminCleanupService {
         for (var key : concat(storage.listKeys("materials/"), storage.listKeys("derived/"))) {
             if (!validObjects.contains(key)) orphanObjects.add(key);
         }
+        var validMockExamObjects = new HashSet<String>();
+        mockExams.findAllActiveWithFiles().forEach(value -> { if (value.getPaperObjectKey() != null)
+            validMockExamObjects.add(value.getPaperObjectKey()); if (value.getAnswerObjectKey() != null)
+            validMockExamObjects.add(value.getAnswerObjectKey()); });
+        var orphanMockExamObjects = storage.listKeys("users/").stream()
+                .filter(key -> !validMockExamObjects.contains(key)).toList();
 
         var activeSegments = segments.findAllActive();
         var validSegmentIds = new HashSet<UUID>(); activeSegments.forEach(value -> validSegmentIds.add(value.getId()));
@@ -53,15 +62,15 @@ public class AdminCleanupService {
             if (!orphan.isEmpty()) inconsistentActiveCourses.add(entry.getKey());
         }
         if (!dryRun) {
-            orphanObjects.forEach(storage::delete); vectors.deletePoints(orphanPoints);
+            orphanObjects.forEach(storage::delete); orphanMockExamObjects.forEach(storage::delete); vectors.deletePoints(orphanPoints);
             orphanLuceneCourses.forEach(lucene::deleteCourse);
             inconsistentActiveCourses.forEach(id -> lucene.rebuild(id, byCourse.getOrDefault(id, List.of())));
         }
-        return new CleanupStats(dryRun, deletedCourses.size(), orphanObjects.size(), orphanPoints.size(),
+        return new CleanupStats(dryRun, deletedCourses.size(), orphanObjects.size(), orphanMockExamObjects.size(), orphanPoints.size(),
                 orphanLuceneCourses.size(), orphanLuceneDocuments, inconsistentActiveCourses.size());
     }
 
     private List<String> concat(List<String> first, List<String> second) { var values = new ArrayList<>(first); values.addAll(second); return values; }
-    public record CleanupStats(boolean dryRun, int deletedCourses, int orphanMinioObjects, int orphanQdrantPoints,
+    public record CleanupStats(boolean dryRun, int deletedCourses, int orphanMinioObjects, int orphanMockExamPdfs, int orphanQdrantPoints,
                                int orphanLuceneCourses, int orphanLuceneDocuments, int rebuiltActiveCourses) {}
 }

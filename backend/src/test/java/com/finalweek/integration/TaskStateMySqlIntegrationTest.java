@@ -35,20 +35,31 @@ class TaskStateMySqlIntegrationTest {
         seed(userId, courseId, materialId, taskId);
         var executor = Executors.newFixedThreadPool(2);
         try {
-            Callable<Integer> claim = () -> update("update parse_task set status='PROCESSING', delivery_attempt_count=delivery_attempt_count+1 " +
+            Callable<Integer> claim = () -> update("update background_task set status='PROCESSING', delivery_attempt_count=delivery_attempt_count+1 " +
                     "where id=? and execution_round=0 and delivery_attempt_count < 3 and status in " +
                     "('PENDING_PUBLISH','PUBLISH_FAILED','QUEUED','RETRYING')", taskId);
             var first = executor.submit(claim); var second = executor.submit(claim);
             assertThat(first.get() + second.get()).isEqualTo(1);
         } finally { executor.shutdownNow(); }
 
-        assertThat(update("update parse_task set status='CANCELLED' where id=? and status in " +
-                "('PENDING_PUBLISH','PUBLISH_FAILED','QUEUED')", taskId)).isZero();
-        assertThat(queryInt("select delivery_attempt_count from parse_task where id=?", taskId)).isOne();
+        assertThat(update("update background_task set status='CANCELLED' where id=? and status='QUEUED'", taskId)).isZero();
+        assertThat(queryInt("select delivery_attempt_count from background_task where id=?", taskId)).isOne();
 
         insertCheckpoint(taskId, UUID.randomUUID());
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> insertCheckpoint(taskId, UUID.randomUUID()))
                 .isInstanceOf(SQLException.class);
+    }
+
+    @Test
+    void targetMigrationsCreateMockExamSnapshotAndCleanupSchema() throws Exception {
+        assertThat(queryScalar("select count(*) from information_schema.tables where table_schema=database() " +
+                "and table_name in ('mock_exam','mock_exam_question','mock_exam_question_source','mock_exam_object_cleanup')"))
+                .isEqualTo(4);
+        assertThat(queryScalar("select count(*) from information_schema.columns where table_schema=database() " +
+                "and table_name='mock_exam' and column_name in " +
+                "('knowledge_version_id','quality_policy_version','history_similarity_threshold','error_message'," +
+                "'pdf_template_version','formula_policy_version','paper_object_key','answer_object_key')")).isEqualTo(8);
+        assertThat(queryScalar("select count(*) from flyway_schema_history where success=true")).isEqualTo(14);
     }
 
     private static void seed(UUID userId, UUID courseId, UUID materialId, UUID taskId) throws Exception {
@@ -67,10 +78,11 @@ class TaskStateMySqlIntegrationTest {
                 sql.setString(4, "materials/it/original"); sql.setString(5, "a".repeat(64));
                 sql.setTimestamp(6, now); sql.setTimestamp(7, now); sql.executeUpdate();
             }
-            try (var sql = connection.prepareStatement("insert into parse_task(id,user_id,course_id,material_id,task_type,status,current_stage,publish_attempt_count,delivery_attempt_count,api_attempt_count,manual_retry_count,execution_round,business_key,created_at,updated_at) values(?,?,?,?,'PARSE_MATERIAL','QUEUED','UPLOADED',1,0,0,0,0,?,?,?)")) {
+            try (var sql = connection.prepareStatement("insert into background_task(id,user_id,course_id,material_id,business_id,task_type,visible_in_global_drawer,status,current_stage,publish_attempt_count,delivery_attempt_count,api_attempt_count,manual_retry_count,execution_round,business_key,created_at,updated_at) values(?,?,?,?,?,'PARSE_MATERIAL',true,'QUEUED','UPLOADED',1,0,0,0,0,?,?,?)")) {
                 sql.setBytes(1, bytes(taskId)); sql.setBytes(2, bytes(userId)); sql.setBytes(3, bytes(courseId));
-                sql.setBytes(4, bytes(materialId)); sql.setString(5, "PARSE_MATERIAL:" + materialId);
-                sql.setTimestamp(6, now); sql.setTimestamp(7, now); sql.executeUpdate();
+                sql.setBytes(4, bytes(materialId)); sql.setBytes(5, bytes(materialId));
+                sql.setString(6, "PARSE_MATERIAL:" + materialId);
+                sql.setTimestamp(7, now); sql.setTimestamp(8, now); sql.executeUpdate();
             }
         }
     }
@@ -85,6 +97,8 @@ class TaskStateMySqlIntegrationTest {
         sql.setBytes(1, bytes(id)); return sql.executeUpdate(); } }
     private static int queryInt(String statement, UUID id) throws Exception { try (var connection = connection(); var sql = connection.prepareStatement(statement)) {
         sql.setBytes(1, bytes(id)); try (var result = sql.executeQuery()) { result.next(); return result.getInt(1); } } }
+    private static int queryScalar(String statement) throws Exception { try (var connection = connection(); var sql = connection.prepareStatement(statement);
+            var result = sql.executeQuery()) { result.next(); return result.getInt(1); } }
     private static Connection connection() throws SQLException { return DriverManager.getConnection(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword()); }
     private static byte[] bytes(UUID value) { return ByteBuffer.allocate(16).putLong(value.getMostSignificantBits()).putLong(value.getLeastSignificantBits()).array(); }
 }

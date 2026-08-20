@@ -16,9 +16,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1")
 public class MaterialTaskController {
     private final MaterialService materials;
-    private final ParseTaskRepository tasks;
+    private final BackgroundTaskRepository tasks;
     private final TaskDispatchService dispatcher;
-    public MaterialTaskController(MaterialService materials, ParseTaskRepository tasks, TaskDispatchService dispatcher) {
+    public MaterialTaskController(MaterialService materials, BackgroundTaskRepository tasks, TaskDispatchService dispatcher) {
         this.materials = materials; this.tasks = tasks; this.dispatcher = dispatcher;
     }
     @PostMapping("/materials/{materialId}/retry")

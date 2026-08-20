@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -50,8 +51,20 @@ public class QdrantVectorStore {
     }
 
     public List<UUID> query(UUID userId, UUID courseId, float[] vector, int limit) {
+        return query(userId, courseId, Set.of(), vector, limit);
+    }
+
+    public List<UUID> query(UUID userId, UUID courseId, Set<UUID> materialIds, float[] vector, int limit) {
         ensureCollection();
-        var filter = filter(Map.of("userId", userId.toString(), "courseId", courseId.toString()));
+        var filter = new java.util.LinkedHashMap<String, Object>(filter(
+                Map.of("userId", userId.toString(), "courseId", courseId.toString())));
+        if (!materialIds.isEmpty()) {
+            @SuppressWarnings("unchecked")
+            var must = new ArrayList<Map<String, Object>>((List<Map<String, Object>>) filter.get("must"));
+            must.add(Map.of("key", "materialId", "match", Map.of("any",
+                    materialIds.stream().map(UUID::toString).sorted().toList())));
+            filter.put("must", must);
+        }
         var response = send("POST", "/collections/" + collection + "/points/query",
                 Map.of("query", vector, "filter", filter, "limit", limit, "with_payload", false));
         var result = response.path("result");

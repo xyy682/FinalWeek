@@ -1,5 +1,7 @@
 # Tech Stack — FinalWeek（求职版 MVP）
 
+> 文档状态：Phase 1–16 已完成。文末“Phase 12–16 技术栈增量”对应已交付的知识版本、通用任务、模拟卷、XeLaTeX 和评测实现。
+
 ## Technical Goal
 
 技术栈以 Java 后端求职为中心，保持和 DoVideoAI 相近的学习难度：一个 Vue 前端、一个 Spring Boot 应用，加上本地 Docker 中间件。所有解析、MQ 消费和 AI 编排均由 Spring Boot 完成，不拆 Python Worker 或微服务。
@@ -23,11 +25,11 @@
 
 - Vue 3 + Composition API + `<script setup>`。
 - Vite + TypeScript strict mode。
-- Vue Router：登录、课程、资料、提纲、计划、问答页面。
-- Pinia：登录用户和少量界面状态；服务端数据以 API 返回为准。
+- Vue Router：登录、课程、资料、提纲、计划、问答、模拟卷页面。
+- Pinia：登录用户、活动任务抽屉和少量界面状态；服务端数据以 API 返回为准。
 - Element Plus：表单、上传、表格、树、进度、弹窗和反馈。
 - 原生 `fetch` 项目封装：统一 CSRF、错误码和请求 ID。
-- SSE：只推送资料解析和提纲生成进度；计划生成与课程问答使用同步 REST，不引入 WebSocket。
+- SSE：推送资料、提纲、计划、模拟卷进度和答疑消息终态；断线后以活动任务/业务历史 REST 恢复，不引入 WebSocket。
 - Markdown：聊天回答只渲染经过清洗的 Markdown 子集。
 
 ## Spring Boot Application
@@ -209,12 +211,82 @@
 
 ## First-Version Configurable Defaults
 
-文档中的数量、大小、时长、TTL、限流、TopK、RRF、同步超时、历史条数、案例数和阈值均是首版默认可配置值，不是不可修改的业务需求；实施时统一写入类型化配置并在 `.env.example` 说明，不得散落为魔法数字。至少包括：
+文档中的数量、大小、时长、TTL、限流、TopK、RRF、后台模型调用超时、历史条数、案例数和阈值均是首版默认可配置值，不是不可修改的业务需求；实施时统一写入类型化配置并在 `.env.example` 说明，不得散落为魔法数字。至少包括：
 
 - 上传会话 TTL：`UPLOAD_TTL_HOURS=24`。
 - RabbitMQ 任务限流（覆盖资料解析与提纲生成）：`PARSE_USER_RATE_PER_MINUTE=5`、`PARSE_GLOBAL_RATE_PER_MINUTE=30`。变量名为兼容首版配置沿用 `PARSE_*`，语义是所有用户触发的 RabbitMQ AI 任务。
 - 用户计划生成限流：`PLAN_USER_RATE_PER_MINUTE=5`。
 - 用户问答限流：`CHAT_USER_RATE_PER_MINUTE=20`。
 - 混合检索：`RRF_K=60`，向量、BM25 和最终 TopK 分别由 `VECTOR_TOP_K`、`BM25_TOP_K`、`FINAL_TOP_K` 配置。
-- 同步接口：`PLAN_REQUEST_TIMEOUT_SECONDS`、`CHAT_REQUEST_TIMEOUT_SECONDS`。
+- 后台计划/答疑模型调用：`PLAN_REQUEST_TIMEOUT_SECONDS`、`CHAT_REQUEST_TIMEOUT_SECONDS`（变量名为兼容首版沿用）。
 - AI 评测案例数、通过阈值和单项评分标准由评测配置文件管理；修改默认值必须在报告中留下配置快照。
+
+## Phase 12–16 技术栈增量（已实现）
+
+### Frontend and Task Delivery
+
+- Vue Router 目标态增加 `/courses/:id/mock-exams`；课程导航从当前四区扩展为五区。
+- 继续使用 Pinia 保存少量全局界面状态，增加只包含活动任务的任务抽屉状态；任务终态和业务结果仍以 REST/MySQL 为准。
+- 复用 `GET /api/v1/tasks/events` 推送资料、提纲、计划、模拟卷进度及答疑消息终态。断线恢复必须先调用活动任务/业务历史 REST，不引入 WebSocket。
+- 计划和答疑不再依赖浏览器同步等待模型：计划进入用户可见后台任务；答疑进入隐藏后台任务并通过消息历史恢复。
+
+### General Background Tasks
+
+- Spring AMQP 继续作为全部长耗时工作的单一队列基础设施，新增计划、模拟卷和答疑任务类型；消息只携带任务及业务标识，不携带题目、全文或 PDF。
+- 现有任务状态、publisher confirm、manual ack、任务级/外部 API 重试、旧执行轮次防护和 MySQL checkpoint 规则扩展到新任务类型。
+- Redis 令牌桶增加模拟卷限流；计划从同步限流迁移到投递前限流。答疑仍执行用户级成本保护，但后台受理不得绕过限流。
+- 全局任务 REST 只返回 `visibleInGlobalDrawer=true` 的活动任务；答疑任务不可见，终态在线事件仍可提示。
+
+### Course Knowledge Versions
+
+- MySQL 增加不可变课程知识版本和版本资料关联表；当前发布版本是计划与模拟卷的输入真相源。
+- Qdrant 与 Lucene 无需复制每个知识版本的数据。模拟卷检索在现有用户/课程过滤上追加版本 material ID 白名单；答疑继续检索全部成功资料。
+- 旧提纲在 MySQL 内部保留以支持历史版本和生成中任务；前端默认只读取当前发布版本。
+
+### XeLaTeX PDF Generation
+
+- 标准试卷和参考答案使用受控 XeLaTeX 模板生成，不使用 PDFBox 进行复杂版面创作。PDFBox 继续负责读取/渲染已有资料，并可用于生成结果的打开、页数和基本结构校验。
+- 后端 Jammy 运行镜像目标态安装固定版本/发行版的 XeLaTeX、必要的基础宏包及 Noto CJK 字体；不得使用 `latest` 或运行时联网下载宏包。
+- XeLaTeX 以非特权 `finalweek` 用户运行，每个任务使用独立临时目录、`-no-shell-escape`、编译超时、文件大小限制和退出码检查。
+- 仓库内只维护两套受版本控制模板：试卷与参考答案。模板负责 A4、分页、题型标题、姓名/学号栏、分值、答题空间及页眉页脚。
+- 业务文本进入模板前统一 TeX 转义。数学内容使用单独字段和受支持命令白名单，不允许模型或用户注入宏定义、包加载、文件读写、网络或 include。
+- 两个 PDF 必须从同一份 Java 已校验 DTO 渲染；任一编译或校验失败都不得发布部分结果。
+
+### Storage
+
+- MinIO 增加按用户/课程/mockExam ID 隔离的试卷与参考答案对象键；原始试卷名仅用于展示和下载文件名。
+- 预览继续采用 ownership 校验后的短时预签名 URL，新标签页使用浏览器原生 PDF 查看器。
+- 单套逻辑删除后写入内部可重试清理记录；清理任务不进入用户任务抽屉。管理员 dry-run 核对增加孤儿模拟卷 PDF。
+
+### AI Structured Output and Validation
+
+- `LlmClient` 继续使用固定 JSON Schema；模拟卷 schema 覆盖七类题型、选项、答案、分值、课程来源 ID、通用知识标识和公式字段。
+- 普通文本、公式、来源 ID 分字段返回，禁止把整份 TeX 或 PDF 交给模型生成。
+- Java Validator 强制执行题型题量、总题数 1–50、整数分值/汇总不超过 1000、可选时长 1–300、补充说明 2000 字、答案完整性和来源 ownership。
+- 不新增联网搜索、Agent、多模型路由或图片生成。通用知识仅使用当前 LLM 内置知识，并在课程资料不足且用户允许时补足。
+
+### Target Configuration
+
+新增配置必须进入类型化配置和 `.env.example`，至少包括：
+
+- 模拟卷用户级限流、生成模型超时、同课程活动任务上限（固定业务语义为 1）。
+- 最大题数默认/硬上限 50、分值汇总上限 1000、时长上限 300 分钟、补充说明上限 2000 字。
+- XeLaTeX 可执行文件、编译超时、最大 PDF 大小、临时目录、模板版本和允许公式命令集版本。
+- 模拟卷分页大小、预签名 URL TTL、逻辑删除对象清理重试与扫描间隔。
+- 历史题相似度策略和警告阈值应可版本化并写入生成记录/评测快照，不得散落在提示词中。
+
+### Target Testing Stack
+
+- 后端单元测试增加知识版本、模拟卷 schema/validator、TeX 转义、公式白名单、模板渲染和双文件原子发布。
+- Testcontainers/Compose 集成测试覆盖迁移后的通用任务表、RabbitMQ 新任务类型、MinIO 双 PDF、逻辑删除清理和用户隔离。
+- Playwright 目标主流程扩展为资料确认、自动提纲、跨页面任务抽屉、异步计划、离页答疑、模拟卷生成历史及 PDF 操作。
+- Golden Case 增加真题风格、教师例题、严格资料不足、通用知识补题、七类题型和公式案例；评测报告区分结构校验、来源忠实度、答案一致性、原题复刻与 PDF 可用性。
+- 上述本地、容器、浏览器和 14 条真实百炼 Golden Case 验证均已实际运行；结果与报告路径见 `docs/TEST_REPORT.md`。
+
+### Target Constraints
+
+- 不新增 Python Worker、独立渲染服务或第二套消息系统。
+- 不允许模型直接输出可执行 TeX 模板；不启用 shell escape；不运行用户提供的 TeX。
+- 不支持依赖图片、图表或示意图的题目，不承诺复杂视觉公式还原。
+- 不建设在线考试、自动评分、错题本、分享或编辑器。
+- 不因新增知识版本复制 Qdrant/Lucene 数据，也不把历史 PDF 设为公开永久 URL。

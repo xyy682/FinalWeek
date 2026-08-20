@@ -8,13 +8,14 @@ import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.finalweek.task.ParseTaskRepository;
+import com.finalweek.task.BackgroundTaskRepository;
 import com.finalweek.task.TaskStatus;
 import com.finalweek.material.MaterialRepository;
 import com.finalweek.material.MaterialStatus;
 import com.finalweek.material.CourseSegmentRepository;
 import com.finalweek.upload.ObjectStorage;
 import com.finalweek.knowledge.KnowledgeCleanupService;
+import com.finalweek.mockexam.MockExamCleanupService;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
@@ -24,22 +25,25 @@ public class CourseService {
     private final CourseRepository courseRepository;
     private final UserAccountRepository userAccountRepository;
     private final FinalWeekProperties properties;
-    private final ParseTaskRepository tasks;
+    private final BackgroundTaskRepository tasks;
     private final MaterialRepository materials;
     private final CourseSegmentRepository segments;
     private final ObjectStorage storage;
     private final KnowledgeCleanupService knowledge;
+    private final MockExamCleanupService mockExamCleanup;
 
     public CourseService(
             CourseRepository courseRepository,
             UserAccountRepository userAccountRepository,
-            FinalWeekProperties properties, ParseTaskRepository tasks, MaterialRepository materials,
-            CourseSegmentRepository segments, ObjectStorage storage, KnowledgeCleanupService knowledge) {
+            FinalWeekProperties properties, BackgroundTaskRepository tasks, MaterialRepository materials,
+            CourseSegmentRepository segments, ObjectStorage storage, KnowledgeCleanupService knowledge,
+            MockExamCleanupService mockExamCleanup) {
         this.courseRepository = courseRepository;
         this.userAccountRepository = userAccountRepository;
         this.properties = properties;
         this.tasks = tasks; this.materials = materials;
         this.segments = segments; this.storage = storage; this.knowledge = knowledge;
+        this.mockExamCleanup = mockExamCleanup;
     }
 
     @Transactional(readOnly = true)
@@ -82,6 +86,7 @@ public class CourseService {
                 materials.updateStatus(task.getMaterialId(), MaterialStatus.CANCELLED);
             }
         });
+        mockExamCleanup.prepareCourseDeletion(courseId);
         var courseMaterials = materials.findAllByCourse_IdAndDeletedFalse(courseId);
         courseMaterials.forEach(material -> {
             segments.deleteAllByMaterial_Id(material.getId());

@@ -6,6 +6,7 @@ import jakarta.validation.constraints.*;
 import java.time.LocalDate;
 import java.util.UUID;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -19,6 +20,7 @@ public class PlanController {
         return new PlanResponse(service.get(principal.userId(), courseId));
     }
     @PostMapping("/courses/{courseId}/plan/generate")
+    @ResponseStatus(HttpStatus.ACCEPTED)
     PlanService.GenerateResult generate(@AuthenticationPrincipal FinalWeekPrincipal principal,
                                         @PathVariable UUID courseId,
                                         @RequestHeader("Idempotency-Key") String key,

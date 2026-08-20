@@ -10,12 +10,13 @@ import com.finalweek.auth.UserAccount;
 import com.finalweek.auth.UserAccountRepository;
 import com.finalweek.common.api.BusinessException;
 import com.finalweek.common.config.FinalWeekProperties;
-import com.finalweek.task.ParseTaskRepository;
-import com.finalweek.task.ParseTask;
+import com.finalweek.task.BackgroundTaskRepository;
+import com.finalweek.task.BackgroundTask;
 import com.finalweek.task.TaskStatus;
 import com.finalweek.material.MaterialRepository;
 import com.finalweek.material.CourseSegmentRepository;
 import com.finalweek.upload.ObjectStorage;
+import com.finalweek.mockexam.MockExamCleanupService;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.UUID;
@@ -27,7 +28,9 @@ class CourseServiceTest {
     private CourseRepository courseRepository;
     private UserAccountRepository userRepository;
     private CourseService service;
-    private ParseTaskRepository tasks;
+    private BackgroundTaskRepository tasks;
+    private MockExamCleanupService mockExamCleanup;
+    private MaterialRepository materials;
 
     @BeforeEach
     void setUp() {
@@ -40,17 +43,35 @@ class CourseServiceTest {
                         "http://localhost:6333", "segments", java.nio.file.Path.of("build/lucene")),
                 new FinalWeekProperties.Ai("https://example.com", "", 3, Duration.ofSeconds(60), Duration.ofSeconds(60), Duration.ofSeconds(60), 20,
                         "asr", "ocr", "embedding", "llm"));
-        tasks = mock(ParseTaskRepository.class);
+        tasks = mock(BackgroundTaskRepository.class);
+        mockExamCleanup = mock(MockExamCleanupService.class);
+        materials = mock(MaterialRepository.class);
         service = new CourseService(courseRepository, userRepository, properties,
-                tasks, mock(MaterialRepository.class),
+                tasks, materials,
                 mock(CourseSegmentRepository.class), mock(ObjectStorage.class),
-                mock(com.finalweek.knowledge.KnowledgeCleanupService.class));
+                mock(com.finalweek.knowledge.KnowledgeCleanupService.class), mockExamCleanup);
+    }
+
+    @Test
+    void courseDeletionPreparesMockExamCleanupBeforeMaterialSegmentsAreRemoved() {
+        var userId = UUID.randomUUID(); var courseId = UUID.randomUUID(); var course = mock(Course.class);
+        when(courseRepository.findOwnedByIdForUpdate(courseId, userId)).thenReturn(Optional.of(course));
+        when(tasks.lockAllByCourseId(courseId)).thenReturn(java.util.List.of());
+        when(materials.findAllByCourse_IdAndDeletedFalse(courseId)).thenReturn(java.util.List.of());
+
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        try { service.delete(userId, courseId); }
+        finally { org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization(); }
+
+        verify(mockExamCleanup).prepareCourseDeletion(courseId);
+        verify(course).markDeleted();
+        verify(courseRepository).save(course);
     }
 
     @Test
     void runningTaskPreventsCourseDeletionWithoutCancellingAnything() {
         var userId = UUID.randomUUID(); var courseId = UUID.randomUUID(); var course = mock(Course.class);
-        var running = mock(ParseTask.class); when(running.getStatus()).thenReturn(TaskStatus.PROCESSING);
+        var running = mock(BackgroundTask.class); when(running.getStatus()).thenReturn(TaskStatus.PROCESSING);
         when(courseRepository.findOwnedByIdForUpdate(courseId, userId)).thenReturn(Optional.of(course));
         when(tasks.lockAllByCourseId(courseId)).thenReturn(java.util.List.of(running));
 
@@ -59,6 +80,7 @@ class CourseServiceTest {
 
         verify(tasks, org.mockito.Mockito.never()).cancelUnstarted(org.mockito.ArgumentMatchers.any());
         verify(courseRepository, org.mockito.Mockito.never()).save(org.mockito.ArgumentMatchers.any());
+        verify(mockExamCleanup, org.mockito.Mockito.never()).prepareCourseDeletion(courseId);
     }
 
     @Test

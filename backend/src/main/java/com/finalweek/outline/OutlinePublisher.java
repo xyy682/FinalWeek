@@ -4,8 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.finalweek.course.CourseRepository;
 import com.finalweek.material.CourseSegment;
 import com.finalweek.material.CourseSegmentRepository;
-import com.finalweek.task.ParseTask;
+import com.finalweek.task.BackgroundTask;
 import com.finalweek.task.PermanentTaskException;
+import com.finalweek.knowledgeversion.*;
 import java.util.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,18 +18,28 @@ public class OutlinePublisher {
     private final OutlineNodeRepository nodes;
     private final CourseSegmentRepository segments;
     private final ObjectMapper mapper;
+    private final CourseKnowledgeVersionRepository versions;
+    private final CourseKnowledgeVersionMaterialRepository versionMaterials;
     public OutlinePublisher(CourseRepository courses, OutlineRepository outlines, OutlineNodeRepository nodes,
-                            CourseSegmentRepository segments, ObjectMapper mapper) {
-        this.courses = courses; this.outlines = outlines; this.nodes = nodes; this.segments = segments; this.mapper = mapper;
+                            CourseSegmentRepository segments, ObjectMapper mapper,
+                            CourseKnowledgeVersionRepository versions,
+                            CourseKnowledgeVersionMaterialRepository versionMaterials) {
+        this.courses = courses; this.outlines = outlines; this.nodes = nodes; this.segments = segments;
+        this.mapper = mapper; this.versions = versions; this.versionMaterials = versionMaterials;
     }
 
     @Transactional
-    public void publish(ParseTask task, GeneratedOutline generated, Set<UUID> retrievedIds) {
+    public void publish(BackgroundTask task, GeneratedOutline generated, Set<UUID> retrievedIds) {
         var course = courses.findOwnedByIdForUpdate(task.getCourseId(), task.getUserId()).orElseThrow(() ->
                 new PermanentTaskException("COURSE_NOT_FOUND", "课程不存在或已删除"));
-        if (task.getGenerationVersion() == null || course.getOutlineGenerationSequence() != task.getGenerationVersion()) {
-            throw new PermanentTaskException("OUTLINE_STALE_GENERATION", "旧提纲生成结果不能覆盖较新版本");
-        }
+        var version = versions.findByIdForUpdate(task.getBusinessId()).orElseThrow(() ->
+                new PermanentTaskException("KNOWLEDGE_VERSION_STALE", "课程知识版本不存在"));
+        if (!version.getCourseId().equals(task.getCourseId())) throw new PermanentTaskException(
+                "KNOWLEDGE_VERSION_STALE", "课程知识版本不属于当前课程");
+        if (version.getStatus() == KnowledgeVersionStatus.PUBLISHED
+                && version.getId().equals(course.getCurrentKnowledgeVersionId())) return;
+        if (version.getStatus() != KnowledgeVersionStatus.GENERATING) throw new PermanentTaskException(
+                "KNOWLEDGE_VERSION_STALE", "课程知识版本已不允许发布");
         var citedIds = new LinkedHashSet<UUID>(); collect(generated.nodes(), citedIds);
         if (!retrievedIds.containsAll(citedIds)) throw new PermanentTaskException(
                 "OUTLINE_SOURCE_INVALID", "提纲引用不属于本次检索上下文");
@@ -36,14 +47,20 @@ public class OutlinePublisher {
         if (owned.size() != citedIds.size()) throw new PermanentTaskException(
                 "OUTLINE_SOURCE_INVALID", "提纲引用不属于当前用户或课程");
         var byId = new HashMap<UUID, CourseSegment>(); owned.forEach(value -> byId.put(value.getId(), value));
+        var allowedMaterials = versionMaterials.findAllByKnowledgeVersionIdOrderByPosition(version.getId()).stream()
+                .map(CourseKnowledgeVersionMaterial::getMaterialId).collect(java.util.stream.Collectors.toSet());
+        if (owned.stream().anyMatch(segment -> !allowedMaterials.contains(segment.getMaterialId())))
+            throw new PermanentTaskException("OUTLINE_SOURCE_INVALID", "提纲引用不属于课程知识版本资料快照");
 
-        var outline = outlines.findByCourse_Id(task.getCourseId()).orElse(null);
-        if (outline == null) outline = outlines.saveAndFlush(new Outline(course, task.getGenerationVersion()));
-        else {
-            nodes.deleteAllForOutline(outline.getId());
-            outline.publish(task.getGenerationVersion()); outlines.saveAndFlush(outline);
-        }
+        var outline = outlines.saveAndFlush(new Outline(course, version, task.getGenerationVersion()));
         saveLevel(outline, null, "", generated.nodes(), byId);
+        if (course.getCurrentKnowledgeVersionId() != null) versions.findByIdForUpdate(
+                course.getCurrentKnowledgeVersionId()).ifPresent(current -> {
+                    if (current.getStatus() == KnowledgeVersionStatus.PUBLISHED) current.supersede();
+                });
+        version.publish(outline.getId());
+        course.publishKnowledgeVersion(version.getId());
+        versions.save(version); courses.save(course);
     }
 
     private void saveLevel(Outline outline, UUID parentId, String parentPath, List<GeneratedOutline.Node> values,

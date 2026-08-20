@@ -11,9 +11,10 @@ import com.finalweek.knowledge.HybridRetrievalService;
 import com.finalweek.knowledge.RetrievalHit;
 import com.finalweek.material.CourseSegment;
 import com.finalweek.material.MaterialRepository;
-import com.finalweek.task.ParseTask;
+import com.finalweek.task.BackgroundTask;
 import com.finalweek.task.PermanentTaskException;
 import com.finalweek.task.TaskStage;
+import com.finalweek.knowledgeversion.KnowledgeVersionService;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -57,20 +58,23 @@ class OutlineGenerationPipelineTest {
         when(segment.getId()).thenReturn(segmentId);
         when(segment.getContent()).thenReturn("Force equals mass times acceleration.");
         var userId = UUID.randomUUID(); var courseId = UUID.randomUUID();
-        var task = new ParseTask(userId, courseId, 1);
+        var knowledgeVersionId = UUID.randomUUID();
+        var task = new BackgroundTask(userId, courseId, knowledgeVersionId, 1);
+        var knowledgeVersions = mock(KnowledgeVersionService.class);
+        when(knowledgeVersions.materialIds(knowledgeVersionId)).thenReturn(List.of(UUID.randomUUID()));
         var context = new OutlineCheckpointService.OutlineContext(List.of(segmentId), "course context JSON request");
         when(checkpoints.completed(null, TaskStage.CONTEXT_RETRIEVED)).thenReturn(false);
         when(checkpoints.completed(null, TaskStage.OUTLINE_GENERATED)).thenReturn(false);
         when(checkpoints.context(null)).thenReturn(context);
-        when(retrieval.retrieve(eq(userId), eq(courseId), anyString())).thenReturn(new HybridRetrievalResult(
+        when(retrieval.retrieve(eq(userId), eq(courseId), anyString(), anySet())).thenReturn(new HybridRetrievalResult(
                 List.of(new RetrievalHit(segment, 1, 1, 1)), false, false));
         var pipeline = new OutlineGenerationPipeline(retrieval, materials, checkpoints, validator,
-                publisher, llm, new ObjectMapper());
+                publisher, llm, new ObjectMapper(), knowledgeVersions);
         var valid = """
                 {"nodes":[{"title":"Newton second law","importance":"HIGH","sourceSegmentIds":["%s"],"children":[]}]}
                 """.formatted(segmentId);
         return new Fixture(pipeline, llm, checkpoints, publisher, task, segmentId, valid);
     }
     private record Fixture(OutlineGenerationPipeline pipeline, LlmClient llm, OutlineCheckpointService checkpoints,
-                           OutlinePublisher publisher, ParseTask task, UUID segmentId, String validJson) {}
+                           OutlinePublisher publisher, BackgroundTask task, UUID segmentId, String validJson) {}
 }

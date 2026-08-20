@@ -10,12 +10,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ExtractionCheckpointService {
-    private final ParseTaskRepository tasks;
+    private final BackgroundTaskRepository tasks;
     private final TaskCheckpointRepository checkpoints;
     private final MaterialRepository materials;
     private final CourseSegmentRepository segments;
     private final TaskProgressService progress;
-    public ExtractionCheckpointService(ParseTaskRepository tasks, TaskCheckpointRepository checkpoints,
+    public ExtractionCheckpointService(BackgroundTaskRepository tasks, TaskCheckpointRepository checkpoints,
                                        MaterialRepository materials, CourseSegmentRepository segments,
                                        TaskProgressService progress) {
         this.tasks = tasks; this.checkpoints = checkpoints; this.materials = materials;

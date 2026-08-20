@@ -125,6 +125,26 @@ finalweek:
     ocr-model: ${BAILIAN_OCR_MODEL:qwen-vl-ocr-latest}
     embedding-model: ${BAILIAN_EMBEDDING_MODEL:text-embedding-v4}
     llm-model: ${BAILIAN_LLM_MODEL:qwen3.7-plus}
+  mock-exam:
+    user-rate-per-minute: ${MOCK_EXAM_USER_RATE_PER_MINUTE:3}
+    request-timeout: ${MOCK_EXAM_REQUEST_TIMEOUT_SECONDS:240}s
+    max-questions: ${MOCK_EXAM_MAX_QUESTIONS:50}
+    max-score: ${MOCK_EXAM_MAX_SCORE:1000}
+    max-duration-minutes: ${MOCK_EXAM_MAX_DURATION_MINUTES:300}
+    max-instruction-length: ${MOCK_EXAM_MAX_INSTRUCTION_LENGTH:2000}
+    default-page-size: ${MOCK_EXAM_PAGE_SIZE:10}
+    history-similarity-warning-threshold: ${MOCK_EXAM_HISTORY_SIMILARITY_THRESHOLD:0.82}
+    quality-policy-version: ${MOCK_EXAM_QUALITY_POLICY_VERSION:v1}
+    cleanup-max-attempts: ${MOCK_EXAM_CLEANUP_MAX_ATTEMPTS:8}
+    cleanup-interval: ${MOCK_EXAM_CLEANUP_INTERVAL_SECONDS:30}s
+    pdf:
+      executable: ${XELATEX_EXECUTABLE:xelatex}
+      compile-timeout: ${XELATEX_COMPILE_TIMEOUT_SECONDS:60}s
+      max-file-size: ${MOCK_EXAM_PDF_MAX_SIZE_MB:20}MB
+      max-log-size: ${XELATEX_MAX_LOG_SIZE_KB:512}KB
+      temp-directory: ${MOCK_EXAM_TEMP_DIRECTORY:./data/tmp/mock-exams}
+      template-version: ${MOCK_EXAM_TEMPLATE_VERSION:v1}
+      formula-policy-version: ${MOCK_EXAM_FORMULA_POLICY_VERSION:v1}
 
 ---
 spring:

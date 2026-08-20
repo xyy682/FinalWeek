@@ -2,7 +2,7 @@ package com.finalweek.ai;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.finalweek.common.config.FinalWeekProperties;
-import com.finalweek.task.ParseTaskRepository;
+import com.finalweek.task.BackgroundTaskRepository;
 import com.finalweek.task.PermanentTaskException;
 import com.finalweek.task.RetryableTaskException;
 import java.net.URI;
@@ -21,10 +21,10 @@ import org.springframework.stereotype.Service;
 @Service
 public class BailianOcrClient implements OcrClient {
     private final FinalWeekProperties properties;
-    private final ParseTaskRepository tasks;
+    private final BackgroundTaskRepository tasks;
     private final ObjectMapper mapper;
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build();
-    public BailianOcrClient(FinalWeekProperties properties, ParseTaskRepository tasks, ObjectMapper mapper) {
+    public BailianOcrClient(FinalWeekProperties properties, BackgroundTaskRepository tasks, ObjectMapper mapper) {
         this.properties = properties; this.tasks = tasks; this.mapper = mapper;
     }
     @Override public String recognize(UUID taskId, Path image) {
