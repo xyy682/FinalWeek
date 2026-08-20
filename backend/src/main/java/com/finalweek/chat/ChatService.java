@@ -7,7 +7,6 @@ import com.finalweek.common.config.FinalWeekProperties;
 import com.finalweek.course.CourseService;
 import com.finalweek.task.*;
 import java.util.*;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -53,7 +52,7 @@ public class ChatService {
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "CHAT_CURSOR_INVALID", "聊天游标无效"))
                 .getCreatedAt();
         int limit = Math.max(1, properties.ai().chatHistoryLimit());
-        var raw = messages.page(userId, courseId, before, PageRequest.of(0, limit + 1));
+        var raw = messages.page(userId, courseId, before, limit + 1);
         var hasMore = raw.size() > limit;
         var selected = new ArrayList<>(raw.subList(0, Math.min(limit, raw.size())));
         var next = hasMore && !selected.isEmpty() ? selected.get(selected.size() - 1).getId() : null;

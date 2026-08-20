@@ -83,7 +83,9 @@ public class TaskStateService {
                 materials.updateStatus(task.getMaterialId(), MaterialStatus.FAILED);
             }
             if (task.getTaskType() == TaskType.GENERATE_OUTLINE)
-                knowledgeVersions.findById(task.getBusinessId()).ifPresent(version -> version.fail(code));
+                knowledgeVersions.findById(task.getBusinessId()).ifPresent(version -> {
+                    version.fail(code); knowledgeVersions.save(version);
+                });
             if (task.getTaskType() == TaskType.GENERATE_PLAN) planRequests.fail(task.getBusinessId(), code);
             if (task.getTaskType() == TaskType.ANSWER_CHAT) chats.fail(task.getUserId(), task.getBusinessId(), code);
             if (task.getTaskType() == TaskType.GENERATE_MOCK_EXAM) mockExams.fail(task.getBusinessId(), code, truncate(message));
@@ -103,7 +105,9 @@ public class TaskStateService {
             materials.updateStatus(task.getMaterialId(), MaterialStatus.SUCCEEDED);
         }
         if (task.getTaskType() == TaskType.GENERATE_MOCK_EXAM) mockExams.state(task.getBusinessId(), TaskStatus.SUCCEEDED);
-        failedTasks.findTopByTask_IdOrderByCreatedAtDesc(id).ifPresent(FailedTask::markResolved);
+        failedTasks.findTopByTask_IdOrderByCreatedAtDesc(id).ifPresent(value -> {
+            value.markResolved(); failedTasks.save(value);
+        });
         progress.publish(task);
     }
 
@@ -114,7 +118,9 @@ public class TaskStateService {
                 "TASK_NOT_CANCELLABLE", "仅排队中的任务可以取消");
         var task = refresh(id, MaterialStatus.CANCELLED);
         if (task.getTaskType() == TaskType.GENERATE_OUTLINE)
-            knowledgeVersions.findById(task.getBusinessId()).ifPresent(version -> version.fail("TASK_CANCELLED"));
+            knowledgeVersions.findById(task.getBusinessId()).ifPresent(version -> {
+                version.fail("TASK_CANCELLED"); knowledgeVersions.save(version);
+            });
         if (task.getTaskType() == TaskType.GENERATE_PLAN) planRequests.fail(task.getBusinessId(), "TASK_CANCELLED");
         if (task.getTaskType() == TaskType.ANSWER_CHAT)
             chats.fail(task.getUserId(), task.getBusinessId(), "TASK_CANCELLED");
@@ -139,9 +145,13 @@ public class TaskStateService {
                 "MOCK_EXAM_RETRY_REQUIRES_NEW_RECORD", "模拟卷重试必须保留原记录并创建新的关联记录");
         if (tasks.prepareManualRetry(id) != 1) throw new BusinessException(HttpStatus.CONFLICT,
                 "TASK_NOT_RETRYABLE", "仅执行失败的任务可以人工重试");
-        failedTasks.findTopByTask_IdOrderByCreatedAtDesc(id).ifPresent(FailedTask::markRedelivered);
+        failedTasks.findTopByTask_IdOrderByCreatedAtDesc(id).ifPresent(value -> {
+            value.markRedelivered(); failedTasks.save(value);
+        });
         if (existing.getTaskType() == TaskType.GENERATE_OUTLINE)
-            knowledgeVersions.findById(existing.getBusinessId()).ifPresent(version -> version.retry());
+            knowledgeVersions.findById(existing.getBusinessId()).ifPresent(version -> {
+                version.retry(); knowledgeVersions.save(version);
+            });
         if (existing.getTaskType() == TaskType.GENERATE_PLAN) planRequests.retry(existing.getBusinessId());
         if (existing.getTaskType() == TaskType.ANSWER_CHAT)
             chats.retryForTask(existing.getUserId(), existing.getBusinessId());

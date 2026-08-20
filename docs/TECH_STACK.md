@@ -39,7 +39,7 @@
 - Spring Web MVC：REST 与 SSE。
 - Spring Security：Cookie Session、授权和 CSRF。
 - Spring Session Data Redis：服务端 Session。
-- Spring Data JPA：业务数据访问。
+- MyBatis-Plus：业务数据访问、分页、条件查询与显式 CAS SQL；实体关系使用标量外键，复杂查询由 Mapper SQL 明确表达。
 - Flyway：数据库迁移；禁止 `ddl-auto=update`。
 - Spring AMQP：RabbitMQ 生产、消费、确认和失败队列。
 - Redisson：上传合并锁、任务执行锁、课程级 Lucene 写锁和令牌桶限流。

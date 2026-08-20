@@ -12,7 +12,6 @@ import java.security.MessageDigest;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import org.springframework.data.domain.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -106,10 +105,13 @@ public class MockExamCoordinator {
     public PageView page(UUID userId, UUID courseId, int page, int size) {
         courses.findByIdAndUserIdAndDeletedFalse(courseId, userId).orElseThrow(this::notFound);
         int safeSize = Math.min(50, Math.max(1, size));
-        var values = exams.pageOwned(userId, courseId, PageRequest.of(Math.max(0, page), safeSize));
-        return new PageView(values.getContent().stream().map(value -> Summary.from(value,
-                        tasks.findById(value.getTaskId()).orElse(null))).toList(), values.getNumber(),
-                values.getSize(), values.getTotalElements(), values.getTotalPages());
+        int safePage = Math.max(0, page);
+        var values = exams.pageOwned(userId, courseId, (long) safePage * safeSize, safeSize);
+        long total = exams.countOwned(userId, courseId);
+        int totalPages = (int) ((total + safeSize - 1) / safeSize);
+        return new PageView(values.stream().map(value -> Summary.from(value,
+                        tasks.findById(value.getTaskId()).orElse(null))).toList(), safePage,
+                safeSize, total, totalPages);
     }
 
     @Transactional

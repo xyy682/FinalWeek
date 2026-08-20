@@ -56,7 +56,10 @@ public class OutlinePublisher {
         saveLevel(outline, null, "", generated.nodes(), byId);
         if (course.getCurrentKnowledgeVersionId() != null) versions.findByIdForUpdate(
                 course.getCurrentKnowledgeVersionId()).ifPresent(current -> {
-                    if (current.getStatus() == KnowledgeVersionStatus.PUBLISHED) current.supersede();
+                    if (current.getStatus() == KnowledgeVersionStatus.PUBLISHED) {
+                        current.supersede();
+                        versions.save(current);
+                    }
                 });
         version.publish(outline.getId());
         course.publishKnowledgeVersion(version.getId());

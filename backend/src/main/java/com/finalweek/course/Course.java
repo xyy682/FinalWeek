@@ -1,64 +1,47 @@
 package com.finalweek.course;
 
+import com.finalweek.common.persistence.BeforeInsert;
+import com.finalweek.common.persistence.BeforeUpdate;
+
 import com.finalweek.auth.UserAccount;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
-import jakarta.persistence.Table;
+import com.baomidou.mybatisplus.annotation.TableField;
 import java.time.Instant;
 import java.util.UUID;
-import org.hibernate.annotations.UuidGenerator;
 
-@Entity
-@Table(name = "course")
 public class Course {
 
-    @Id
-    @UuidGenerator
     private UUID id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_id", nullable = false)
-    private UserAccount user;
+    private UUID userId;
 
-    @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(nullable = false)
     private boolean deleted;
 
-    @Column(name = "outline_generation_seq", nullable = false)
+    @TableField("outline_generation_seq")
     private long outlineGenerationSequence;
 
-    @Column(name = "current_knowledge_version_id")
     private UUID currentKnowledgeVersionId;
 
-    @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
     protected Course() {}
 
     public Course(UserAccount user, String name) {
-        this.user = user;
+        this.userId = user.getId();
         this.name = name;
     }
 
-    @PrePersist
+    @BeforeInsert
     void created() {
         var now = Instant.now();
         createdAt = now;
         updatedAt = now;
     }
 
-    @PreUpdate
+    @BeforeUpdate
     void updated() {
         updatedAt = Instant.now();
     }
@@ -66,6 +49,8 @@ public class Course {
     public UUID getId() {
         return id;
     }
+
+    public UUID getUserId() { return userId; }
 
     public String getName() {
         return name;

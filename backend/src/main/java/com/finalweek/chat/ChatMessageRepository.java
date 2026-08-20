@@ -1,26 +1,26 @@
 package com.finalweek.chat;
 
-import jakarta.persistence.LockModeType;
+import com.finalweek.common.persistence.BaseRepository;
 import java.time.Instant;
-import java.util.*;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.*;
-import org.springframework.data.repository.query.Param;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.apache.ibatis.annotations.Select;
 
-public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> {
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select message from ChatMessage message where message.id = :id and message.userId = :userId")
-    Optional<ChatMessage> findOwnedForUpdate(@Param("id") UUID id, @Param("userId") UUID userId);
+public interface ChatMessageRepository extends BaseRepository<ChatMessage> {
+    @Select("select * from chat_message where id = #{id} and user_id = #{userId} for update")
+    Optional<ChatMessage> findOwnedForUpdate(UUID id, UUID userId);
+    @Select("select * from chat_message where reply_to_id = #{replyToId}")
     Optional<ChatMessage> findByReplyToId(UUID replyToId);
+    @Select("select * from chat_message where id = #{id} and user_id = #{userId}")
     Optional<ChatMessage> findByIdAndUserId(UUID id, UUID userId);
+    @Select("select * from chat_message where id = #{id} and user_id = #{userId} and course_id = #{courseId}")
     Optional<ChatMessage> findByIdAndUserIdAndCourseId(UUID id, UUID userId, UUID courseId);
-    @Query("select message from ChatMessage message where message.courseId = :courseId and message.userId = :userId " +
-            "and (:before is null or message.createdAt < :before) order by message.createdAt desc, message.id desc")
-    List<ChatMessage> page(@Param("userId") UUID userId, @Param("courseId") UUID courseId,
-                           @Param("before") Instant before, Pageable pageable);
-    @Query("select message from ChatMessage message where message.courseId = :courseId and message.userId = :userId " +
-            "and message.status = 'SUCCEEDED' and message.createdAt < :before " +
-            "order by message.createdAt desc, message.id desc")
-    List<ChatMessage> recentSucceeded(@Param("userId") UUID userId, @Param("courseId") UUID courseId,
-                                      @Param("before") Instant before, Pageable pageable);
+    @Select({"<script>", "select * from chat_message where course_id = #{courseId} and user_id = #{userId}",
+            "<if test='before != null'> and created_at &lt; #{before}</if>",
+            "order by created_at desc, id desc limit #{limit}", "</script>"})
+    List<ChatMessage> page(UUID userId, UUID courseId, Instant before, int limit);
+    @Select("select * from chat_message where course_id = #{courseId} and user_id = #{userId} " +
+            "and status = 'SUCCEEDED' and created_at &lt; #{before} order by created_at desc, id desc limit #{limit}")
+    List<ChatMessage> recentSucceeded(UUID userId, UUID courseId, Instant before, int limit);
 }

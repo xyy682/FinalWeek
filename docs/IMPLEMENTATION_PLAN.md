@@ -288,7 +288,7 @@
 
 ### Tasks
 
-1. 设计 Flyway 迁移：保留现有任务数据并把 `parse_task` 规范化为 `background_task`，迁移 checkpoint/failed task 外键与 JPA 模型。
+1. 设计 Flyway 迁移：保留现有任务数据并把 `parse_task` 规范化为 `background_task`，迁移 checkpoint/failed task 外键与持久化模型。
 2. 增加 `course_knowledge_version` 和版本资料关联表；以排序后的资料业务键计算集合哈希，建立课程版本唯一约束和当前发布指针。
 3. 将提纲关联到知识版本并内部保留旧版；新版发布时旧版转为 `SUPERSEDED`，当前接口仍只展示唯一 `PUBLISHED` 版本。
 4. 实现“资料已上传完毕”：服务端锁课程、拒绝活动资料任务和空成功集合、允许明确忽略失败资料、阻止相同集合重复确认。

@@ -1,25 +1,22 @@
 package com.finalweek.course;
 
-import jakarta.persistence.LockModeType;
+import com.finalweek.common.persistence.BaseRepository;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Lock;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
+import org.apache.ibatis.annotations.Select;
 
-public interface CourseRepository extends JpaRepository<Course, UUID> {
-
+public interface CourseRepository extends BaseRepository<Course> {
+    @Select("select * from course where user_id = #{userId} and deleted = false order by updated_at desc")
     List<Course> findAllByUserIdAndDeletedFalseOrderByUpdatedAtDesc(UUID userId);
-
+    @Select("select * from course where id = #{id} and user_id = #{userId} and deleted = false")
     Optional<Course> findByIdAndUserIdAndDeletedFalse(UUID id, UUID userId);
-
+    @Select("select count(*) from course where user_id = #{userId} and deleted = false")
     long countByUserIdAndDeletedFalse(UUID userId);
+    @Select("select * from course where deleted = false")
     List<Course> findAllByDeletedFalse();
+    @Select("select * from course where deleted = true")
     List<Course> findAllByDeletedTrue();
-
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select course from Course course where course.id = :id and course.user.id = :userId and course.deleted = false")
-    Optional<Course> findOwnedByIdForUpdate(@Param("id") UUID id, @Param("userId") UUID userId);
+    @Select("select * from course where id = #{id} and user_id = #{userId} and deleted = false for update")
+    Optional<Course> findOwnedByIdForUpdate(UUID id, UUID userId);
 }

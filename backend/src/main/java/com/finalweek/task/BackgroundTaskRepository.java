@@ -1,106 +1,76 @@
 package com.finalweek.task;
 
-import jakarta.persistence.LockModeType;
+import com.finalweek.common.persistence.BaseRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Lock;
-import org.springframework.data.jpa.repository.Modifying;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
-import org.springframework.transaction.annotation.Transactional;
+import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
-public interface BackgroundTaskRepository extends JpaRepository<BackgroundTask, UUID> {
+public interface BackgroundTaskRepository extends BaseRepository<BackgroundTask> {
+    @Select("select * from background_task where id = #{id} and user_id = #{userId}")
     Optional<BackgroundTask> findByIdAndUserId(UUID id, UUID userId);
+    @Select("select * from background_task where material_id = #{materialId}")
     Optional<BackgroundTask> findByMaterial_Id(UUID materialId);
+    @Select({"<script>", "select * from background_task where course_id = #{courseId} and task_type = #{taskType}",
+            "and status in <foreach collection='statuses' item='status' open='(' separator=',' close=')'>#{status}</foreach>",
+            "order by created_at desc limit 1", "</script>"})
     Optional<BackgroundTask> findFirstByCourseIdAndTaskTypeAndStatusInOrderByCreatedAtDesc(
             UUID courseId, TaskType taskType, List<TaskStatus> statuses);
+    @Select({"<script>", "select * from background_task where user_id = #{userId} and visible_in_global_drawer = true",
+            "and status in <foreach collection='statuses' item='status' open='(' separator=',' close=')'>#{status}</foreach>",
+            "order by updated_at desc", "</script>"})
     List<BackgroundTask> findAllByUserIdAndVisibleInGlobalDrawerTrueAndStatusInOrderByUpdatedAtDesc(
             UUID userId, List<TaskStatus> statuses);
+    @Select("select * from background_task where course_id = #{courseId} order by created_at for update")
+    List<BackgroundTask> lockAllByCourseId(UUID courseId);
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select task from BackgroundTask task where task.courseId = :courseId order by task.createdAt")
-    List<BackgroundTask> lockAllByCourseId(@Param("courseId") UUID courseId);
-
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("update BackgroundTask task set task.status = 'QUEUED', task.updatedAt = CURRENT_TIMESTAMP " +
-            "where task.id = :id and task.executionRound = :round and task.status = 'PENDING_PUBLISH'")
-    int markQueued(@Param("id") UUID id, @Param("round") int round);
-
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("update BackgroundTask task set task.status = 'PUBLISH_FAILED', task.errorCode = :code, " +
-            "task.errorMessage = :message, task.updatedAt = CURRENT_TIMESTAMP " +
-            "where task.id = :id and task.executionRound = :round and task.status = 'PENDING_PUBLISH'")
-    int markPublishFailed(@Param("id") UUID id, @Param("round") int round,
-                          @Param("code") String code, @Param("message") String message);
-
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("update BackgroundTask task set task.status = 'PROCESSING', " +
-            "task.deliveryAttemptCount = task.deliveryAttemptCount + 1, " +
-            "task.startedAt = coalesce(task.startedAt, CURRENT_TIMESTAMP), task.updatedAt = CURRENT_TIMESTAMP " +
-            "where task.id = :id and task.executionRound = :round and task.deliveryAttemptCount < :maximum " +
-            "and task.status in ('PENDING_PUBLISH','PUBLISH_FAILED','QUEUED','RETRYING')")
-    int claim(@Param("id") UUID id, @Param("round") int round, @Param("maximum") int maximum);
-
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("update BackgroundTask task set task.status = 'RETRYING', task.errorCode = :code, " +
-            "task.errorMessage = :message, task.updatedAt = CURRENT_TIMESTAMP " +
-            "where task.id = :id and task.executionRound = :round and task.status = 'PROCESSING'")
-    int markRetrying(@Param("id") UUID id, @Param("round") int round,
-                     @Param("code") String code, @Param("message") String message);
-
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("update BackgroundTask task set task.status = 'FAILED', task.errorCode = :code, " +
-            "task.errorMessage = :message, task.finishedAt = CURRENT_TIMESTAMP, task.updatedAt = CURRENT_TIMESTAMP " +
-            "where task.id = :id and task.executionRound = :round and task.status = 'PROCESSING'")
-    int markFailed(@Param("id") UUID id, @Param("round") int round,
-                   @Param("code") String code, @Param("message") String message);
-
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("update BackgroundTask task set task.status = 'SUCCEEDED', task.currentStage = 'COMPLETED', " +
-            "task.errorCode = null, task.errorMessage = null, task.finishedAt = CURRENT_TIMESTAMP, " +
-            "task.updatedAt = CURRENT_TIMESTAMP where task.id = :id and task.executionRound = :round " +
-            "and task.status = 'PROCESSING'")
-    int markSucceeded(@Param("id") UUID id, @Param("round") int round);
-
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("update BackgroundTask task set task.status = 'CANCELLED', task.finishedAt = CURRENT_TIMESTAMP, " +
-            "task.updatedAt = CURRENT_TIMESTAMP where task.id = :id " +
-            "and task.status in ('PENDING_PUBLISH','PUBLISH_FAILED','QUEUED')")
-    int cancelUnstarted(@Param("id") UUID id);
-
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("update BackgroundTask task set task.status = 'CANCELLED', task.finishedAt = CURRENT_TIMESTAMP, " +
-            "task.updatedAt = CURRENT_TIMESTAMP where task.id = :id and task.status = 'QUEUED'")
-    int cancelQueued(@Param("id") UUID id);
-
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("update BackgroundTask task set task.status = 'PENDING_PUBLISH', " +
-            "task.publishAttemptCount = task.publishAttemptCount + 1, task.errorCode = null, " +
-            "task.errorMessage = null, task.updatedAt = CURRENT_TIMESTAMP where task.id = :id " +
-            "and task.status = 'PUBLISH_FAILED'")
-    int prepareRepublish(@Param("id") UUID id);
-
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("update BackgroundTask task set task.status = 'PENDING_PUBLISH', task.executionRound = task.executionRound + 1, " +
-            "task.manualRetryCount = task.manualRetryCount + 1, task.publishAttemptCount = task.publishAttemptCount + 1, " +
-            "task.deliveryAttemptCount = 0, task.apiAttemptCount = 0, task.errorCode = null, task.errorMessage = null, " +
-            "task.startedAt = null, task.finishedAt = null, task.updatedAt = CURRENT_TIMESTAMP " +
-            "where task.id = :id and task.status = 'FAILED'")
-    int prepareManualRetry(@Param("id") UUID id);
-
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Transactional
-    @Query("update BackgroundTask task set task.apiAttemptCount = task.apiAttemptCount + 1, " +
-            "task.updatedAt = CURRENT_TIMESTAMP where task.id = :id and task.status = 'PROCESSING'")
-    int incrementApiAttempt(@Param("id") UUID id);
-
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("update BackgroundTask task set task.currentStage = :stage, task.updatedAt = CURRENT_TIMESTAMP " +
-            "where task.id = :id and task.status = 'PROCESSING'")
-    int advanceStage(@Param("id") UUID id, @Param("stage") TaskStage stage);
-
+    @Update("update background_task set status = 'QUEUED', updated_at = current_timestamp " +
+            "where id = #{id} and execution_round = #{round} and status = 'PENDING_PUBLISH'")
+    int markQueued(UUID id, int round);
+    @Update("update background_task set status = 'PUBLISH_FAILED', error_code = #{code}, error_message = #{message}, " +
+            "updated_at = current_timestamp where id = #{id} and execution_round = #{round} " +
+            "and status = 'PENDING_PUBLISH'")
+    int markPublishFailed(UUID id, int round, String code, String message);
+    @Update("update background_task set status = 'PROCESSING', delivery_attempt_count = delivery_attempt_count + 1, " +
+            "started_at = coalesce(started_at, current_timestamp), updated_at = current_timestamp " +
+            "where id = #{id} and execution_round = #{round} and delivery_attempt_count &lt; #{maximum} " +
+            "and status in ('PENDING_PUBLISH','PUBLISH_FAILED','QUEUED','RETRYING')")
+    int claim(UUID id, int round, int maximum);
+    @Update("update background_task set status = 'RETRYING', error_code = #{code}, error_message = #{message}, " +
+            "updated_at = current_timestamp where id = #{id} and execution_round = #{round} and status = 'PROCESSING'")
+    int markRetrying(UUID id, int round, String code, String message);
+    @Update("update background_task set status = 'FAILED', error_code = #{code}, error_message = #{message}, " +
+            "finished_at = current_timestamp, updated_at = current_timestamp where id = #{id} " +
+            "and execution_round = #{round} and status = 'PROCESSING'")
+    int markFailed(UUID id, int round, String code, String message);
+    @Update("update background_task set status = 'SUCCEEDED', current_stage = 'COMPLETED', error_code = null, " +
+            "error_message = null, finished_at = current_timestamp, updated_at = current_timestamp where id = #{id} " +
+            "and execution_round = #{round} and status = 'PROCESSING'")
+    int markSucceeded(UUID id, int round);
+    @Update("update background_task set status = 'CANCELLED', finished_at = current_timestamp, " +
+            "updated_at = current_timestamp where id = #{id} and status in ('PENDING_PUBLISH','PUBLISH_FAILED','QUEUED')")
+    int cancelUnstarted(UUID id);
+    @Update("update background_task set status = 'CANCELLED', finished_at = current_timestamp, " +
+            "updated_at = current_timestamp where id = #{id} and status = 'QUEUED'")
+    int cancelQueued(UUID id);
+    @Update("update background_task set status = 'PENDING_PUBLISH', publish_attempt_count = publish_attempt_count + 1, " +
+            "error_code = null, error_message = null, updated_at = current_timestamp where id = #{id} " +
+            "and status = 'PUBLISH_FAILED'")
+    int prepareRepublish(UUID id);
+    @Update("update background_task set status = 'PENDING_PUBLISH', execution_round = execution_round + 1, " +
+            "manual_retry_count = manual_retry_count + 1, publish_attempt_count = publish_attempt_count + 1, " +
+            "delivery_attempt_count = 0, api_attempt_count = 0, error_code = null, error_message = null, " +
+            "started_at = null, finished_at = null, updated_at = current_timestamp where id = #{id} and status = 'FAILED'")
+    int prepareManualRetry(UUID id);
+    @Update("update background_task set api_attempt_count = api_attempt_count + 1, updated_at = current_timestamp " +
+            "where id = #{id} and status = 'PROCESSING'")
+    int incrementApiAttempt(UUID id);
+    @Update("update background_task set current_stage = #{stage}, updated_at = current_timestamp " +
+            "where id = #{id} and status = 'PROCESSING'")
+    int advanceStage(UUID id, TaskStage stage);
+    @Select("select * from background_task where status = #{status} and updated_at &lt; #{before} " +
+            "order by updated_at asc limit 100")
     List<BackgroundTask> findTop100ByStatusAndUpdatedAtBeforeOrderByUpdatedAtAsc(TaskStatus status, Instant before);
 }

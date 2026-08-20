@@ -1,70 +1,41 @@
 package com.finalweek.material;
 
+import com.finalweek.common.persistence.BeforeInsert;
+import com.finalweek.common.persistence.BeforeUpdate;
+
 import com.finalweek.course.Course;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
-import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
-@Entity
-@Table(name = "material")
 public class Material {
 
-    @Id
     private UUID id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "course_id", nullable = false)
-    private Course course;
+    private UUID courseId;
 
-    @Column(name = "original_filename", nullable = false, length = 255)
     private String originalFilename;
 
-    @Column(name = "object_key", nullable = false, length = 512)
     private String objectKey;
-    @Column(name = "preview_object_key", length = 512) private String previewObjectKey;
+    private String previewObjectKey;
 
-    @Column(name = "content_hash", length = 64)
-    @JdbcTypeCode(SqlTypes.CHAR)
     private String contentHash;
 
-    @Column(name = "size_bytes", nullable = false)
     private long sizeBytes;
-    @Column(name = "duration_ms") private Long durationMs;
+    private Long durationMs;
 
-    @Column(name = "media_type", nullable = false, length = 100)
     private String mediaType;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "material_type", nullable = false, length = 30)
     private MaterialType materialType;
 
-    @Column(name = "focus_notes", length = 1000)
     private String focusNotes;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 30)
     private MaterialStatus status;
-    @Column(name = "parse_warning", length = 1000) private String parseWarning;
+    private String parseWarning;
 
-    @Column(nullable = false)
     private boolean deleted;
 
-    @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
     protected Material() {}
@@ -72,7 +43,7 @@ public class Material {
     public Material(UUID id, Course course, String originalFilename, String objectKey, String contentHash,
                     long sizeBytes, String mediaType, MaterialType materialType, String focusNotes) {
         this.id = id;
-        this.course = course;
+        this.courseId = course.getId();
         this.originalFilename = originalFilename;
         this.objectKey = objectKey;
         this.contentHash = contentHash;
@@ -83,10 +54,10 @@ public class Material {
         this.status = MaterialStatus.PENDING_PUBLISH;
     }
 
-    @PrePersist
+    @BeforeInsert
     void created() { var now = Instant.now(); createdAt = now; updatedAt = now; }
 
-    @PreUpdate
+    @BeforeUpdate
     void updated() { updatedAt = Instant.now(); }
 
     public void markDeleted() { deleted = true; contentHash = null; }
@@ -94,7 +65,7 @@ public class Material {
         this.previewObjectKey = previewObjectKey; this.durationMs = durationMs; this.parseWarning = warning;
     }
     public UUID getId() { return id; }
-    public UUID getCourseId() { return course.getId(); }
+    public UUID getCourseId() { return courseId; }
     public String getOriginalFilename() { return originalFilename; }
     public String getObjectKey() { return objectKey; }
     public String getPreviewObjectKey() { return previewObjectKey; }

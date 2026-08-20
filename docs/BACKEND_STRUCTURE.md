@@ -1,6 +1,6 @@
 # Backend Structure — FinalWeek（求职版 MVP）
 
-> 文档状态：Phase 1–16 已完成。文末“Phase 12–16 扩展架构”对应已交付的迁移、JPA 模型、REST 接口、任务管线和测试要求。
+> 文档状态：Phase 1–16 已完成。文末“Phase 12–16 扩展架构”对应已交付的迁移、MyBatis-Plus 模型与 Mapper、REST 接口、任务管线和测试要求。
 
 ## Architecture
 

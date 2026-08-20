@@ -7,6 +7,7 @@ import static org.mockito.Mockito.*;
 import com.finalweek.auth.UserAccount;
 import com.finalweek.auth.UserAccountRepository;
 import com.finalweek.common.api.BusinessException;
+import com.finalweek.common.persistence.MybatisPlusConfiguration;
 import com.finalweek.course.Course;
 import com.finalweek.course.CourseRepository;
 import com.finalweek.material.*;
@@ -22,8 +23,9 @@ import java.util.UUID;
 import java.util.concurrent.*;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import com.baomidou.mybatisplus.test.autoconfigure.MybatisPlusTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -33,12 +35,13 @@ import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-@DataJpaTest(properties = "spring.jpa.hibernate.ddl-auto=validate")
+@MybatisPlusTest
+@Import(MybatisPlusConfiguration.class)
 @Testcontainers(disabledWithoutDocker = true)
-class KnowledgeVersionJpaIntegrationTest {
+class KnowledgeVersionMybatisIntegrationTest {
     @Container
     static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4.10")
-            .withDatabaseName("finalweek_jpa").withUsername("finalweek").withPassword("finalweek_test");
+            .withDatabaseName("finalweek_mybatis").withUsername("finalweek").withPassword("finalweek_test");
 
     @DynamicPropertySource
     static void database(DynamicPropertyRegistry registry) {
@@ -61,7 +64,7 @@ class KnowledgeVersionJpaIntegrationTest {
 
     @Test
     void persistsVersionSnapshotAndVersionedOutlineAgainstMigratedSchema() {
-        var user = users.saveAndFlush(new UserAccount("version-jpa@example.com"));
+        var user = users.saveAndFlush(new UserAccount("version-mybatis@example.com"));
         var course = courses.saveAndFlush(new Course(user, "数据结构"));
         var materialId = UUID.randomUUID();
         materials.saveAndFlush(new Material(materialId, course, "notes.md", "materials/notes.md",
@@ -73,12 +76,13 @@ class KnowledgeVersionJpaIntegrationTest {
 
         assertThat(versionMaterials.findAllByKnowledgeVersionIdOrderByPosition(version.getId()))
                 .extracting(CourseKnowledgeVersionMaterial::getMaterialId).containsExactly(materialId);
-        assertThat(outlines.findByKnowledgeVersion_Id(version.getId())).contains(outline);
+        assertThat(outlines.findByKnowledgeVersion_Id(version.getId()))
+                .get().extracting(Outline::getId).isEqualTo(outline.getId());
     }
 
     @Test
     void hardDeletingCleanedExamDetachesRetriesAndCascadesQuestions() {
-        var user = users.saveAndFlush(new UserAccount("cleanup-jpa@example.com"));
+        var user = users.saveAndFlush(new UserAccount("cleanup-mybatis@example.com"));
         var course = courses.saveAndFlush(new Course(user, "工程力学"));
         var version = versions.saveAndFlush(new CourseKnowledgeVersion(course, 1, "c".repeat(64)));
         var request = new MockExamRequestNormalizer.Normalized(MockExamScope.WHOLE_COURSE, List.of(),
@@ -109,7 +113,7 @@ class KnowledgeVersionJpaIntegrationTest {
 
     @Test
     void completedPartialCleanupCanBeRequeuedWhenFailureHistoryIsDeletedLater() {
-        var user = users.saveAndFlush(new UserAccount("cleanup-requeue-jpa@example.com"));
+        var user = users.saveAndFlush(new UserAccount("cleanup-requeue-mybatis@example.com"));
         var course = courses.saveAndFlush(new Course(user, "概率论"));
         var version = versions.saveAndFlush(new CourseKnowledgeVersion(course, 1, "9".repeat(64)));
         var request = new MockExamRequestNormalizer.Normalized(MockExamScope.WHOLE_COURSE, List.of(),

@@ -3,7 +3,6 @@ package com.finalweek.mockexam;
 import com.finalweek.upload.ObjectStorage;
 import java.time.Instant;
 import java.util.*;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,7 +51,7 @@ public class MockExamCleanupService {
         }
     }
     private void enqueueDeletedCourses() {
-        exams.findCleanupCandidatesForDeletedCourses(PageRequest.of(0, 100)).forEach(exam -> {
+        exams.findCleanupCandidatesForDeletedCourses(100).forEach(exam -> {
             exam.delete(); exams.save(exam);
             enqueueLocked(exam, exam.getPaperObjectKey(), exam.getAnswerObjectKey());
         });
@@ -71,11 +70,11 @@ public class MockExamCleanupService {
         }
     }
     protected MockExamObjectCleanup claim() {
-        var values = cleanups.findDueForUpdate(Instant.now(), PageRequest.of(0, 1));
+        var values = cleanups.findDueForUpdate(Instant.now(), 1);
         if (values.isEmpty()) return null; var value = values.get(0); value.claim(); return cleanups.save(value);
     }
     protected void complete(UUID id) { cleanups.findById(id).ifPresent(value -> {
-        var exam = value.getMockExam();
+        var exam = exams.findById(value.getMockExamId()).orElseThrow();
         if (exam.getDeletedAt() == null) { value.succeed(); cleanups.save(value); return; }
         exams.detachRetriesOf(exam.getId());
         cleanups.delete(value);

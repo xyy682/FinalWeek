@@ -1,19 +1,19 @@
 package com.finalweek.outline;
 
+import com.finalweek.common.persistence.BaseRepository;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.jpa.repository.Modifying;
-import org.springframework.data.repository.query.Param;
+import org.apache.ibatis.annotations.Delete;
+import org.apache.ibatis.annotations.Select;
 
-public interface OutlineNodeRepository extends JpaRepository<OutlineNode, UUID> {
+public interface OutlineNodeRepository extends BaseRepository<OutlineNode> {
+    @Select("select * from outline_node where outline_id = #{outlineId} order by position")
     List<OutlineNode> findAllByOutline_IdOrderByPosition(UUID outlineId);
-    @Query("select node from OutlineNode node join node.outline outline join outline.course course " +
-            "where node.id = :id and course.user.id = :userId and course.deleted = false")
-    Optional<OutlineNode> findOwned(@Param("id") UUID id, @Param("userId") UUID userId);
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("delete from OutlineNode node where node.outline.id = :outlineId")
-    int deleteAllForOutline(@Param("outlineId") UUID outlineId);
+    @Select("select node.* from outline_node node join outline on outline.id = node.outline_id " +
+            "join course on course.id = outline.course_id where node.id = #{id} and course.user_id = #{userId} " +
+            "and course.deleted = false")
+    Optional<OutlineNode> findOwned(UUID id, UUID userId);
+    @Delete("delete from outline_node where outline_id = #{outlineId}")
+    int deleteAllForOutline(UUID outlineId);
 }

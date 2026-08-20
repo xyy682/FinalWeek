@@ -1,16 +1,12 @@
 package com.finalweek.plan;
 
-import jakarta.persistence.LockModeType;
+import com.finalweek.common.persistence.BaseRepository;
 import java.util.Optional;
 import java.util.UUID;
-import org.springframework.data.jpa.repository.*;
-import org.springframework.data.repository.query.Param;
+import org.apache.ibatis.annotations.Select;
 
-public interface PlanGenerationRequestRepository extends JpaRepository<PlanGenerationRequest, UUID> {
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select request from PlanGenerationRequest request where request.userId = :userId " +
-            "and request.courseId = :courseId and request.idempotencyKey = :key")
-    Optional<PlanGenerationRequest> findForUpdate(@Param("userId") UUID userId,
-                                                   @Param("courseId") UUID courseId,
-                                                   @Param("key") String key);
+public interface PlanGenerationRequestRepository extends BaseRepository<PlanGenerationRequest> {
+    @Select("select * from plan_generation_request where user_id = #{userId} and course_id = #{courseId} " +
+            "and idempotency_key = #{key} for update")
+    Optional<PlanGenerationRequest> findForUpdate(UUID userId, UUID courseId, String key);
 }
