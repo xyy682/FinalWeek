@@ -30,7 +30,7 @@ public class MaterialFinalizer {
 
     @Transactional(readOnly = true)
     public Optional<Material> completed(UUID uploadId) {
-        return completions.findById(uploadId).map(UploadCompletion::getMaterial);
+        return Optional.ofNullable(completions.findMaterialByUploadId(uploadId));
     }
 
     @Transactional(readOnly = true)

@@ -81,7 +81,8 @@ class MockExamCleanupServiceTest {
         var exam = mock(MockExam.class);
         var cleanupId = UUID.randomUUID(); var examId = UUID.randomUUID();
         when(cleanups.findById(cleanupId)).thenReturn(java.util.Optional.of(cleanup));
-        when(cleanup.getMockExam()).thenReturn(exam);
+        when(cleanup.getMockExamId()).thenReturn(examId);
+        when(exams.findById(examId)).thenReturn(java.util.Optional.of(exam));
         when(exam.getId()).thenReturn(examId);
         when(exam.getDeletedAt()).thenReturn(Instant.now());
         var properties = new MockExamProperties(3, Duration.ofMinutes(4), 50, 1000, 300,
@@ -102,9 +103,10 @@ class MockExamCleanupServiceTest {
         var exams = mock(MockExamRepository.class);
         var cleanup = mock(MockExamObjectCleanup.class);
         var exam = mock(MockExam.class);
-        var cleanupId = UUID.randomUUID();
+        var cleanupId = UUID.randomUUID(); var examId = UUID.randomUUID();
         when(cleanups.findById(cleanupId)).thenReturn(java.util.Optional.of(cleanup));
-        when(cleanup.getMockExam()).thenReturn(exam);
+        when(cleanup.getMockExamId()).thenReturn(examId);
+        when(exams.findById(examId)).thenReturn(java.util.Optional.of(exam));
         when(exam.getDeletedAt()).thenReturn(null);
         var properties = new MockExamProperties(3, Duration.ofMinutes(4), 50, 1000, 300,
                 2000, 10, .82, "v1", 8);
@@ -115,6 +117,6 @@ class MockExamCleanupServiceTest {
 
         verify(cleanup).succeed();
         verify(cleanups).save(cleanup);
-        verify(exams, never()).delete(any());
+        verify(exams, never()).delete(any(MockExam.class));
     }
 }

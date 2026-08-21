@@ -5,10 +5,6 @@ spring:
     url: ${MYSQL_URL:jdbc:mysql://localhost:3306/finalweek?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
     username: ${MYSQL_USER:finalweek}
     password: ${MYSQL_PASSWORD:finalweek_dev_password}
-  jpa:
-    open-in-view: false
-    hibernate:
-      ddl-auto: validate
   flyway:
     enabled: true
   data:
@@ -145,6 +141,18 @@ finalweek:
       temp-directory: ${MOCK_EXAM_TEMP_DIRECTORY:./data/tmp/mock-exams}
       template-version: ${MOCK_EXAM_TEMPLATE_VERSION:v1}
       formula-policy-version: ${MOCK_EXAM_FORMULA_POLICY_VERSION:v1}
+
+mybatis-plus:
+  type-handlers-package: com.finalweek.common.persistence
+  configuration:
+    map-underscore-to-camel-case: true
+    default-enum-type-handler: org.apache.ibatis.type.EnumTypeHandler
+  global-config:
+    banner: false
+    db-config:
+      # Entities are saved as complete aggregates. Persisting null is required for
+      # state transitions that intentionally clear an error or retry reference.
+      update-strategy: always
 
 ---
 spring:

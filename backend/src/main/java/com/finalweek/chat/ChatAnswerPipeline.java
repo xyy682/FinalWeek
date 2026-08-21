@@ -8,7 +8,6 @@ import com.finalweek.knowledge.HybridRetrievalService;
 import com.finalweek.material.CourseSegmentRepository;
 import com.finalweek.task.*;
 import java.util.*;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -74,7 +73,7 @@ public class ChatAnswerPipeline implements TaskPipeline {
     }
     private List<ChatMessage> recent(BackgroundTask task, ChatMessage question) {
         var values = new ArrayList<>(messages.recentSucceeded(task.getUserId(), task.getCourseId(),
-                question.getCreatedAt(), PageRequest.of(0, Math.max(1, properties.ai().chatHistoryLimit()))));
+                question.getCreatedAt(), Math.max(1, properties.ai().chatHistoryLimit())));
         Collections.reverse(values); return values;
     }
     private String systemPrompt() {

@@ -1,19 +1,17 @@
 package com.finalweek.knowledgeversion;
 
-import jakarta.persistence.LockModeType;
+import com.finalweek.common.persistence.BaseRepository;
 import java.util.Optional;
 import java.util.UUID;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Lock;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
+import org.apache.ibatis.annotations.Select;
 
-public interface CourseKnowledgeVersionRepository extends JpaRepository<CourseKnowledgeVersion, UUID> {
+public interface CourseKnowledgeVersionRepository extends BaseRepository<CourseKnowledgeVersion> {
+    @Select("select * from course_knowledge_version where course_id = #{courseId} and material_set_hash = #{materialSetHash}")
     Optional<CourseKnowledgeVersion> findByCourse_IdAndMaterialSetHash(UUID courseId, String materialSetHash);
+    @Select("select * from course_knowledge_version where course_id = #{courseId} and status = #{status}")
     Optional<CourseKnowledgeVersion> findByCourse_IdAndStatus(UUID courseId, KnowledgeVersionStatus status);
+    @Select("select * from course_knowledge_version where course_id = #{courseId} order by version desc limit 1")
     Optional<CourseKnowledgeVersion> findFirstByCourse_IdOrderByVersionDesc(UUID courseId);
-
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select version from CourseKnowledgeVersion version where version.id = :id")
-    Optional<CourseKnowledgeVersion> findByIdForUpdate(@Param("id") UUID id);
+    @Select("select * from course_knowledge_version where id = #{id} for update")
+    Optional<CourseKnowledgeVersion> findByIdForUpdate(UUID id);
 }

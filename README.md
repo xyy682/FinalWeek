@@ -5,7 +5,7 @@ FinalWeek 是面向大学生期末复习的课程资料理解工具。项目按 
 ## 当前可运行内容
 
 - Vue 3.5 + Vite 8 + TypeScript 6 + Element Plus 前端，包含邮箱登录、课程列表、资料/知识提纲/复习计划/课程问答/模拟卷五区独立 URL、全局活动任务抽屉、设置页和手机基础布局。
-- Java 21 + Spring Boot 3.5 单体，已实现 Mailpit 邮箱验证码、Redis TTL/限流、Spring Session、CSRF、课程 CRUD/逻辑删除、8 门上限和 ownership 隔离。
+- Java 21 + Spring Boot 3.5 单体，业务持久化采用 MyBatis-Plus、标量外键和显式 Mapper SQL；已实现 Mailpit 邮箱验证码、Redis TTL/限流、Spring Session、CSRF、课程 CRUD/逻辑删除、8 门上限和 ownership 隔离。
 - Redis 故障门禁覆盖登录、全部认证接口和未来 AI API 路径，统一返回 `503 SERVICE_REDIS_UNAVAILABLE`；静态落地页及公开 ping 仍可访问。
 - 分片上传使用 Redis 元数据/完成分片集合/完成标记、MinIO 确定性临时对象、Redisson complete 锁和 MySQL 唯一约束；支持断点差集续传、完整 SHA-256、格式/大小校验、同课程去重与过期临时分片清理。
 - 上传完成会在同一数据库事务创建资料与 `PENDING_PUBLISH` 解析任务；RabbitMQ 使用 durable 队列、publisher confirm、manual ack、每轮三次投递预算和 DLQ，Redis/SSE 推送进度，MySQL REST 状态负责断线恢复。
@@ -111,7 +111,7 @@ corepack pnpm@10.18.3 test
 corepack pnpm@10.18.3 build
 ```
 
-当前宿主机完整后端构建执行 105 项 JUnit，0 failures、0 errors、0 skipped；包含 MySQL 8.4.10 Testcontainers、知识版本双线程确认竞争、同课程出卷冲突、模拟卷清理记录再排队，以及启用真实 `D:\texlive\2026\bin\windows\xelatex.exe` 的中文/公式模板测试。Docker 镜像构建同样执行 105 项，其中依赖宿主机 Docker/XeLaTeX 的 7 项按环境条件跳过。前端执行 5 项 Vitest，并完成类型检查和生产构建。Playwright 在 Desktop Chromium、系统 Edge 和 Pixel 7 三个项目上共发现 9 项：5 passed、4 个按项目设计 skipped、0 failed；最终重新运行的真实 AI 主链路在 Chromium 于 53.9 秒内完成。
+2026-08-21 MyBatis-Plus 重构后的宿主机完整后端构建执行 105 项 JUnit，0 failures、0 errors、1 skipped；MySQL 8.4.10 Testcontainers、知识版本双线程确认竞争、同课程出卷冲突和模拟卷清理记录再排队均通过，唯一跳过项是当前环境未设置 `XELATEX_EXECUTABLE` 的真实模板测试。历史启用 `D:\texlive\2026\bin\windows\xelatex.exe` 时该中文/公式模板测试已通过。Docker 镜像构建同样执行 105 项，其中依赖宿主机 Docker/XeLaTeX 的 7 项按环境条件跳过。前端执行 5 项 Vitest，并完成类型检查和生产构建。Playwright 在 Desktop Chromium、系统 Edge 和 Pixel 7 三个项目上共发现 9 项：5 passed、4 个按项目设计 skipped、0 failed；最终重新运行的真实 AI 主链路在 Chromium 于 53.9 秒内完成。
 
 自动化测试在原有上传、解析、检索和权限覆盖基础上，增加知识版本集合幂等/失败资料忽略/版本化提纲、通用任务可见性与取消竞争、异步计划/答疑恢复、七类题型与整数溢出边界、严格资料/通用知识、来源与相似度策略、TeX 转义/公式白名单、双 PDF 原子发布、逻辑删除/对象清理和课程级清理。详见 [`docs/TEST_REPORT.md`](docs/TEST_REPORT.md)。
 

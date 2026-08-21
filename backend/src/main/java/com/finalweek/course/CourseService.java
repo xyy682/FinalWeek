@@ -70,7 +70,7 @@ public class CourseService {
     public Course rename(UUID userId, UUID courseId, String name) {
         var course = courseRepository.findOwnedByIdForUpdate(courseId, userId).orElseThrow(this::notFound);
         course.rename(normalize(name));
-        return course;
+        return courseRepository.save(course);
     }
 
     @Transactional

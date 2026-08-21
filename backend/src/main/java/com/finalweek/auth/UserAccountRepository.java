@@ -1,19 +1,16 @@
 package com.finalweek.auth;
 
-import jakarta.persistence.LockModeType;
+import com.finalweek.common.persistence.BaseRepository;
 import java.util.Optional;
 import java.util.UUID;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Lock;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 
-public interface UserAccountRepository extends JpaRepository<UserAccount, UUID> {
+public interface UserAccountRepository extends BaseRepository<UserAccount> {
 
+    @Select("select * from user_account where email = #{email}")
     Optional<UserAccount> findByEmail(String email);
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select user from UserAccount user where user.id = :id")
+    @Select("select * from user_account where id = #{id} for update")
     Optional<UserAccount> findByIdForUpdate(@Param("id") UUID id);
 }
-

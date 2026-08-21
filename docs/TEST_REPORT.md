@@ -1,6 +1,6 @@
 # FinalWeek 测试报告
 
-更新时间：2026-08-13（Asia/Shanghai）
+更新时间：2026-08-21（Asia/Shanghai）
 
 本报告记录 Phase 16 最终实际执行结果和复现入口。数字来自本地求职版 MVP 环境，不代表公网性能或生产 SLA；外部百炼评测与真实 AI 浏览器链路均在用户明确授权后运行。
 
@@ -8,6 +8,7 @@
 
 | 层级 | 实际结果 | 说明 |
 | --- | --- | --- |
+| MyBatis-Plus 重构回归 | 105 tests，0 failures，0 errors，1 skipped | 2026-08-21 宿主机全量执行；MySQL/Testcontainers 6 项全部通过，仅因未设置 `XELATEX_EXECUTABLE` 跳过 1 项真实模板测试 |
 | 后端 JUnit | 105 tests，0 failures，0 errors，0 skipped | 宿主机启用 Docker 与真实 XeLaTeX；最终回归耗时 1 分 59 秒 |
 | Docker 后端构建 | 105 tests，0 failures，0 errors，7 skipped | 7 项依赖宿主机 Docker/XeLaTeX 的条件测试跳过；镜像构建成功 |
 | MySQL Testcontainers | 6 tests，0 failures，0 errors，0 skipped | 任务 CAS 2 项 + 知识版本并发/持久化/最终级联及清理再排队 4 项；MySQL 8.4.10 与 14 个 Flyway migration |
@@ -49,8 +50,8 @@ Playwright 的 4 个 skipped 是按项目设计：昂贵的真实 AI 全链路�
 | 风险 | 证据 | 结论 |
 | --- | --- | --- |
 | 资料确认状态边界 | `KnowledgeVersionServiceTest` | 活动资料任务拒绝确认；失败资料必须显式忽略 |
-| 相同资料集合重复确认 | 集合哈希唯一约束、课程锁、`KnowledgeVersionServiceTest`、`KnowledgeVersionJpaIntegrationTest` 双线程竞争 | 真实 MySQL 下仅创建一个不可变知识版本和一个提纲任务，另一请求返回集合未变化 |
-| 版本化提纲迁移 | `KnowledgeVersionJpaIntegrationTest` | V10–V14 在 MySQL 8.4.10 生效，知识版本与提纲关系可持久化 |
+| 相同资料集合重复确认 | 集合哈希唯一约束、课程锁、`KnowledgeVersionServiceTest`、`KnowledgeVersionMybatisIntegrationTest` 双线程竞争 | 真实 MySQL 下仅创建一个不可变知识版本和一个提纲任务，另一请求返回集合未变化 |
+| 版本化提纲迁移 | `KnowledgeVersionMybatisIntegrationTest` | V10–V14 在 MySQL 8.4.10 生效，知识版本与提纲关系可持久化 |
 | 通用任务迁移与取消竞争 | `TaskStateMySqlIntegrationTest`、`TaskStateServiceTargetTest` | 原任务数据迁移；可见性、checkpoint 和 claim/cancel CAS 有数据库证据 |
 | 异步计划/答疑离页恢复 | pipeline/coordinator 测试 + `full-journey.spec.ts` | REST 先返回后台任务/`PENDING` 消息，离页后从业务接口恢复终态 |
 | 七类题型和数值边界 | `MockExamRequestNormalizerTest`、`MockExamValidatorTest` | 七类 DTO/答案通过；1–50、1000 分、300 分钟、2000 字和整数溢出受控 |
@@ -62,7 +63,7 @@ Playwright 的 4 个 skipped 是按项目设计：昂贵的真实 AI 全链路�
 | 试卷泄露答案 | `MockExamTexRendererTest` + 实际 PDF 目视检查 | 试卷只渲染题干公式，答案公式仅出现在参考答案 |
 | 双 PDF 部分失败 | `XeLatexMockExamArtifactGeneratorTest` | 任何部分失败先确认对象清理，不发布单边结果 |
 | PDF 可用性 | `XeLatexTemplateIntegrationTest` + 容器内实际编译 | 中文/公式、A4、两遍编译、PDFBox 页数和非空检查通过 |
-| 逻辑删除和对象清理 | `MockExamObjectCleanupTest`、`MockExamCleanupServiceTest`、`KnowledgeVersionJpaIntegrationTest` | 删除立即隐藏；对象清理退避重试；已完成/失败清理记录可在稍后逻辑删除时安全重新排队；课程删除分离来源并登记双 PDF 清理 |
+| 逻辑删除和对象清理 | `MockExamObjectCleanupTest`、`MockExamCleanupServiceTest`、`KnowledgeVersionMybatisIntegrationTest` | 删除立即隐藏；对象清理退避重试；已完成/失败清理记录可在稍后逻辑删除时安全重新排队；课程删除分离来源并登记双 PDF 清理 |
 | 真实主流程 | Playwright `full-journey.spec.ts` | 两资料 → 知识版本 → 提纲 → 计划 → 离页答疑 → 2 题模拟卷 → 双 PDF 预览/下载通过 |
 | 运行时契约 | `/v3/api-docs`、Flyway 表、Docker 健康检查 | OpenAPI 含 5 个模拟卷路径；迁移版本 14；真实数据库有 1 套成功卷和 2 道题 |
 

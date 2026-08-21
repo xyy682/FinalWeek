@@ -1,37 +1,33 @@
 package com.finalweek.plan;
 
-import jakarta.persistence.*;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 
-@Entity
-@Table(name = "plan_task")
 public class PlanTask {
-    @Id private UUID id;
-    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "plan_id", nullable = false)
-    private StudyPlan plan;
-    @Column(name = "outline_node_id", nullable = false) private UUID outlineNodeId;
-    @Column(name = "knowledge_title", nullable = false, length = 200) private String knowledgeTitle;
-    @Column(name = "planned_date", nullable = false) private LocalDate plannedDate;
-    @Column(name = "estimated_minutes", nullable = false) private int estimatedMinutes;
-    @Column(nullable = false) private boolean completed;
-    @Column(name = "completed_at") private Instant completedAt;
-    @Column(nullable = false) private int position;
+    private UUID id;
+    private UUID planId;
+    private UUID outlineNodeId;
+    private String knowledgeTitle;
+    private LocalDate plannedDate;
+    private int estimatedMinutes;
+    private boolean completed;
+    private Instant completedAt;
+    private int position;
     protected PlanTask() {}
     public PlanTask(StudyPlan plan, UUID outlineNodeId, String knowledgeTitle, LocalDate plannedDate,
                     int estimatedMinutes, int position) {
         this.id = UUID.nameUUIDFromBytes(("plan-task:" + plan.getId() + ":" + plan.getVersion() + ":" + position)
                 .getBytes(StandardCharsets.UTF_8));
-        this.plan = plan; this.outlineNodeId = outlineNodeId; this.knowledgeTitle = knowledgeTitle;
+        this.planId = plan.getId(); this.outlineNodeId = outlineNodeId; this.knowledgeTitle = knowledgeTitle;
         this.plannedDate = plannedDate; this.estimatedMinutes = estimatedMinutes; this.position = position;
     }
     public void setCompleted(boolean value) {
         completed = value; completedAt = value ? Instant.now() : null;
     }
     public UUID getId() { return id; }
-    public UUID getPlanId() { return plan.getId(); }
+    public UUID getPlanId() { return planId; }
     public UUID getOutlineNodeId() { return outlineNodeId; }
     public String getKnowledgeTitle() { return knowledgeTitle; }
     public LocalDate getPlannedDate() { return plannedDate; }

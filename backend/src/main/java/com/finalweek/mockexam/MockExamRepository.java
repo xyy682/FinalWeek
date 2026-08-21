@@ -1,30 +1,38 @@
 package com.finalweek.mockexam;
 
-import java.util.*;
-import org.springframework.data.domain.*;
-import org.springframework.data.jpa.repository.*;
-import org.springframework.data.repository.query.Param;
+import com.finalweek.common.persistence.BaseRepository;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
-public interface MockExamRepository extends JpaRepository<MockExam, UUID> {
+public interface MockExamRepository extends BaseRepository<MockExam> {
+    @Select("select * from mock_exam where course_id = #{courseId}")
     List<MockExam> findAllByCourseId(UUID courseId);
-    @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("update MockExam candidate set candidate.retryOf = null where candidate.retryOf.id = :examId")
-    int detachRetriesOf(@Param("examId") UUID examId);
+    @Update("update mock_exam set retry_of_id = null where retry_of_id = #{examId}")
+    int detachRetriesOf(UUID examId);
+    @Select("select * from mock_exam where user_id = #{userId} and course_id = #{courseId} " +
+            "and idempotency_key = #{idempotencyKey}")
     Optional<MockExam> findByUserIdAndCourseIdAndIdempotencyKey(UUID userId, UUID courseId, String idempotencyKey);
-    @Query("select exam from MockExam exam join com.finalweek.course.Course course on course.id = exam.courseId " +
-            "where exam.id = :id and exam.userId = :userId and exam.deletedAt is null and course.deleted = false")
-    Optional<MockExam> findOwned(@Param("id") UUID id, @Param("userId") UUID userId);
-    @Query("select exam from MockExam exam join com.finalweek.course.Course course on course.id = exam.courseId " +
-            "where exam.courseId = :courseId and exam.userId = :userId and exam.deletedAt is null " +
-            "and course.deleted = false order by exam.createdAt desc, exam.id desc")
-    Page<MockExam> pageOwned(@Param("userId") UUID userId, @Param("courseId") UUID courseId, Pageable pageable);
-    @Query("select exam from MockExam exam where exam.courseId = :courseId and exam.deletedAt is null " +
-            "and exam.status = 'SUCCEEDED' order by exam.createdAt desc")
-    List<MockExam> findSucceededByCourseId(@Param("courseId") UUID courseId);
-    @Query("select exam from MockExam exam join com.finalweek.course.Course course on course.id = exam.courseId " +
-            "where course.deleted = true and exam.deletedAt is null")
-    List<MockExam> findCleanupCandidatesForDeletedCourses(Pageable pageable);
-    @Query("select exam from MockExam exam join com.finalweek.course.Course course on course.id = exam.courseId " +
-            "where course.deleted = false and exam.deletedAt is null and exam.status = 'SUCCEEDED'")
+    @Select("select exam.* from mock_exam exam join course on course.id = exam.course_id where exam.id = #{id} " +
+            "and exam.user_id = #{userId} and exam.deleted_at is null and course.deleted = false")
+    Optional<MockExam> findOwned(UUID id, UUID userId);
+    @Select("select exam.* from mock_exam exam join course on course.id = exam.course_id " +
+            "where exam.course_id = #{courseId} and exam.user_id = #{userId} and exam.deleted_at is null " +
+            "and course.deleted = false order by exam.created_at desc, exam.id desc limit #{limit} offset #{offset}")
+    List<MockExam> pageOwned(UUID userId, UUID courseId, long offset, int limit);
+    @Select("select count(*) from mock_exam exam join course on course.id = exam.course_id " +
+            "where exam.course_id = #{courseId} and exam.user_id = #{userId} and exam.deleted_at is null " +
+            "and course.deleted = false")
+    long countOwned(UUID userId, UUID courseId);
+    @Select("select * from mock_exam where course_id = #{courseId} and deleted_at is null " +
+            "and status = 'SUCCEEDED' order by created_at desc")
+    List<MockExam> findSucceededByCourseId(UUID courseId);
+    @Select("select exam.* from mock_exam exam join course on course.id = exam.course_id " +
+            "where course.deleted = true and exam.deleted_at is null limit #{limit}")
+    List<MockExam> findCleanupCandidatesForDeletedCourses(int limit);
+    @Select("select exam.* from mock_exam exam join course on course.id = exam.course_id " +
+            "where course.deleted = false and exam.deleted_at is null and exam.status = 'SUCCEEDED'")
     List<MockExam> findAllActiveWithFiles();
 }

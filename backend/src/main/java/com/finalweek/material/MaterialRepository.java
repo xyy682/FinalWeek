@@ -1,32 +1,34 @@
 package com.finalweek.material;
 
-import jakarta.persistence.LockModeType;
+import com.finalweek.common.persistence.BaseRepository;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Lock;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.jpa.repository.Modifying;
-import org.springframework.data.repository.query.Param;
+import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
-public interface MaterialRepository extends JpaRepository<Material, UUID> {
+public interface MaterialRepository extends BaseRepository<Material> {
+    @Select("select material.* from material join course on course.id = material.course_id " +
+            "where material.course_id = #{courseId} and course.user_id = #{userId} and material.deleted = false " +
+            "order by material.created_at desc")
     List<Material> findAllByCourse_IdAndCourse_User_IdAndDeletedFalseOrderByCreatedAtDesc(UUID courseId, UUID userId);
+    @Select("select * from material where course_id = #{courseId} and deleted = false")
     List<Material> findAllByCourse_IdAndDeletedFalse(UUID courseId);
+    @Select("select material.* from material join course on course.id = material.course_id " +
+            "where material.id = #{id} and course.user_id = #{userId} and material.deleted = false")
     Optional<Material> findByIdAndCourse_User_IdAndDeletedFalse(UUID id, UUID userId);
+    @Select("select * from material where course_id = #{courseId} and content_hash = #{contentHash} and deleted = false")
     Optional<Material> findByCourse_IdAndContentHashAndDeletedFalse(UUID courseId, String contentHash);
+    @Select("select count(*) from material where course_id = #{courseId} and deleted = false")
     long countByCourse_IdAndDeletedFalse(UUID courseId);
+    @Select("select * from material where course_id = #{courseId} and deleted = false order by updated_at desc limit 1")
     Optional<Material> findTopByCourse_IdAndDeletedFalseOrderByUpdatedAtDesc(UUID courseId);
-
-    @Query("select material from Material material where material.deleted = false and material.course.deleted = false")
+    @Select("select material.* from material join course on course.id = material.course_id " +
+            "where material.deleted = false and course.deleted = false")
     List<Material> findAllActive();
-
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("update Material material set material.status = :status, material.updatedAt = CURRENT_TIMESTAMP " +
-            "where material.id = :id")
-    int updateStatus(@Param("id") UUID id, @Param("status") MaterialStatus status);
-
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select material from Material material where material.id = :id and material.course.user.id = :userId and material.deleted = false")
-    Optional<Material> findOwnedByIdForUpdate(@Param("id") UUID id, @Param("userId") UUID userId);
+    @Update("update material set status = #{status}, updated_at = current_timestamp where id = #{id}")
+    int updateStatus(UUID id, MaterialStatus status);
+    @Select("select material.* from material join course on course.id = material.course_id " +
+            "where material.id = #{id} and course.user_id = #{userId} and material.deleted = false for update")
+    Optional<Material> findOwnedByIdForUpdate(UUID id, UUID userId);
 }

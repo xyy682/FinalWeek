@@ -1,33 +1,24 @@
 package com.finalweek.upload;
 
+import com.finalweek.common.persistence.BeforeInsert;
+import com.finalweek.common.persistence.BeforeUpdate;
+
 import com.finalweek.material.Material;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.Table;
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
 import java.time.Instant;
 import java.util.UUID;
 
-@Entity
-@Table(name = "upload_completion")
 public class UploadCompletion {
-    @Id
-    @Column(name = "upload_id")
+    @TableId(type = IdType.INPUT)
     private UUID uploadId;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "material_id", nullable = false)
-    private Material material;
+    private UUID materialId;
 
-    @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
     protected UploadCompletion() {}
-    public UploadCompletion(UUID uploadId, Material material) { this.uploadId = uploadId; this.material = material; }
-    @PrePersist void created() { createdAt = Instant.now(); }
-    public Material getMaterial() { return material; }
+    public UploadCompletion(UUID uploadId, Material material) { this.uploadId = uploadId; this.materialId = material.getId(); }
+    @BeforeInsert void created() { createdAt = Instant.now(); }
+    public UUID getMaterialId() { return materialId; }
 }
