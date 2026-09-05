@@ -1,0 +1,69 @@
+{
+  "run_id": "20260822-144416",
+  "iterations": 5,
+  "accepted_202": 5,
+  "http_500": 0,
+  "rows": [
+    {
+      "iteration": 1,
+      "email": "outline-repro-20260822-144416-1@example.com",
+      "course_id": "588a3e8b-bff6-4da6-9f2f-e671737d85c4",
+      "http_status": 202,
+      "elapsed_ms": 75.833,
+      "request_id": "outline-repro-20260822-144416-1",
+      "response_task_id": "b9d8d57f-39c9-484e-bba0-3eab06206e8c",
+      "current_version_status": "PUBLISHED",
+      "failed_task_status": null,
+      "error": null
+    },
+    {
+      "iteration": 2,
+      "email": "outline-repro-20260822-144416-2@example.com",
+      "course_id": "ab1f6951-71ff-497e-850b-eafd31bce6c7",
+      "http_status": 202,
+      "elapsed_ms": 91.5,
+      "request_id": "outline-repro-20260822-144416-2",
+      "response_task_id": "807ef934-40fd-4db8-ad09-75479c3fddef",
+      "current_version_status": "PUBLISHED",
+      "failed_task_status": null,
+      "error": null
+    },
+    {
+      "iteration": 3,
+      "email": "outline-repro-20260822-144416-3@example.com",
+      "course_id": "b62df1f3-4898-46be-93a0-514714becce3",
+      "http_status": 202,
+      "elapsed_ms": 75.537,
+      "request_id": "outline-repro-20260822-144416-3",
+      "response_task_id": "2d7d3f0c-d27c-4c65-93a1-bb2d538a7b49",
+      "current_version_status": "PUBLISHED",
+      "failed_task_status": null,
+      "error": null
+    },
+    {
+      "iteration": 4,
+      "email": "outline-repro-20260822-144416-4@example.com",
+      "course_id": "cf60a8ea-4574-43cc-893e-d424fadf1789",
+      "http_status": 202,
+      "elapsed_ms": 51.085,
+      "request_id": "outline-repro-20260822-144416-4",
+      "response_task_id": "e106f546-23ce-487b-8023-2ef4aca08e13",
+      "current_version_status": "PUBLISHED",
+      "failed_task_status": null,
+      "error": null
+    },
+    {
+      "iteration": 5,
+      "email": "outline-repro-20260822-144416-5@example.com",
+      "course_id": "6616221b-4653-4d20-b81a-284c61f32def",
+      "http_status": 202,
+      "elapsed_ms": 66.886,
+      "request_id": "outline-repro-20260822-144416-5",
+      "response_task_id": "4c116017-718d-46fb-a2d2-e9d652d53d37",
+      "current_version_status": "PUBLISHED",
+      "failed_task_status": null,
+      "error": null
+    }
+  ],
+  "raw_csv": "D:\\学习项目\\FinalWeek\\resume-metrics\\scripts\\..\\raw\\outline-acceptance-repro-20260822-144416.csv"
+}

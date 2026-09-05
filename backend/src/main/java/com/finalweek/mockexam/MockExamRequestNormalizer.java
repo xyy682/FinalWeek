@@ -13,7 +13,7 @@ public class MockExamRequestNormalizer {
             MockExamQuestionType.SINGLE_CHOICE, 2, MockExamQuestionType.MULTIPLE_CHOICE, 4,
             MockExamQuestionType.TRUE_FALSE, 2, MockExamQuestionType.FILL_BLANK, 3,
             MockExamQuestionType.SHORT_ANSWER, 8, MockExamQuestionType.CALCULATION, 10,
-            MockExamQuestionType.ESSAY, 15);
+            MockExamQuestionType.ESSAY, 15, MockExamQuestionType.COMPREHENSIVE, 20);
     private static final Pattern UNSUPPORTED = Pattern.compile(
             "(?i)(请|需要|要求|使用|通过|生成).{0,8}(联网|互联网搜索|网页搜索|图片题|图表题|示意图题|看图题)|不要.{0,4}(答案|参考答案)");
 

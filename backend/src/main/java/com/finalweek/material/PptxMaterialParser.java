@@ -12,12 +12,17 @@ import java.util.List;
 import javax.imageio.ImageIO;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.rendering.PDFRenderer;
+import org.apache.poi.openxml4j.opc.OPCPackage;
+import org.apache.poi.openxml4j.opc.PackageAccess;
 import org.apache.poi.xslf.usermodel.XMLSlideShow;
 import org.apache.poi.xslf.usermodel.XSLFTextShape;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 @Component
 public class PptxMaterialParser implements MaterialParser {
+    private static final Logger log = LoggerFactory.getLogger(PptxMaterialParser.class);
     private static final int NATIVE_TEXT_THRESHOLD = 12;
     private final OcrClient ocr;
     public PptxMaterialParser(OcrClient ocr) { this.ocr = ocr; }
@@ -26,12 +31,19 @@ public class PptxMaterialParser implements MaterialParser {
     }
     @Override public ExtractionResult extract(BackgroundTask task, Material material, Path source, Path workDirectory) {
         var nativeTexts = new ArrayList<String>();
-        try (var input = Files.newInputStream(source); var deck = new XMLSlideShow(input)) {
+        try (var pkg = OPCPackage.open(source.toFile(), PackageAccess.READ); var deck = new XMLSlideShow(pkg)) {
             deck.getSlides().forEach(slide -> nativeTexts.add(slide.getShapes().stream()
                     .filter(XSLFTextShape.class::isInstance).map(XSLFTextShape.class::cast)
                     .map(XSLFTextShape::getText).filter(value -> value != null && !value.isBlank())
                     .reduce("", (left, right) -> left.isBlank() ? right : left + "\n" + right).strip()));
-        } catch (Exception exception) { throw new PermanentTaskException("PPTX_PARSE_FAILED", "PPTX 文件损坏或无法读取"); }
+        } catch (Exception exception) {
+            log.error("PPTX native text extraction failed taskId={} materialId={} file={} sizeBytes={}",
+                    task.getId(), material.getId(), material.getOriginalFilename(), material.getSizeBytes(), exception);
+            var zipSecurityRejected = exceptionChain(exception).contains("zip bomb");
+            throw new PermanentTaskException(zipSecurityRejected ? "PPTX_SECURITY_REJECTED" : "PPTX_INVALID_PACKAGE",
+                    zipSecurityRejected ? "该 PPTX 包含当前解析器暂不兼容的高压缩内容，请另存为新 PPTX 或转换为 PDF 后重试"
+                            : "PPTX 不是有效的 OOXML 文件或结构无法读取");
+        }
 
         ExternalProcess.run(workDirectory, Duration.ofMinutes(2), "PPTX_RENDER_FAILED",
                 List.of("soffice", "-env:UserInstallation=" + workDirectory.resolve("lo-profile").toUri(),
@@ -60,5 +72,12 @@ public class PptxMaterialParser implements MaterialParser {
         catch (Exception exception) { throw new PermanentTaskException("PPTX_RENDER_FAILED", "PPTX 预览页面读取失败"); }
         if (units.isEmpty()) throw new PermanentTaskException("CONTENT_EMPTY", "PPTX 没有可提取文字");
         return new ExtractionResult(units, warnings, preview, null);
+    }
+
+    private String exceptionChain(Throwable value) {
+        var result = new StringBuilder();
+        for (var current = value; current != null; current = current.getCause())
+            result.append(' ').append(current.getMessage());
+        return result.toString().toLowerCase(java.util.Locale.ROOT);
     }
 }

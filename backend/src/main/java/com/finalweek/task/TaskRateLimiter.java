@@ -17,10 +17,10 @@ public class TaskRateLimiter {
         this.redisson = redisson; this.properties = properties;
     }
     public void acquire(UUID userId) {
-        var perUser = redisson.getRateLimiter("fw:rate:parse:user:" + userId);
+        var perUser = redisson.getRateLimiter("fw:rate:parse:v2:user:" + userId);
         perUser.trySetRate(RateType.OVERALL, properties.limits().parseUserRatePerMinute(), Duration.ofMinutes(1));
         if (!perUser.tryAcquire()) throw limited();
-        var global = redisson.getRateLimiter("fw:rate:parse:global");
+        var global = redisson.getRateLimiter("fw:rate:parse:v2:global");
         global.trySetRate(RateType.OVERALL, properties.limits().parseGlobalRatePerMinute(), Duration.ofMinutes(1));
         if (!global.tryAcquire()) throw limited();
     }
@@ -37,6 +37,7 @@ public class TaskRateLimiter {
                 "CHAT_RATE_LIMITED", "问答过于频繁，请稍后重试");
     }
     private BusinessException limited() {
-        return new BusinessException(HttpStatus.TOO_MANY_REQUESTS, "TASK_PUBLISH_RATE_LIMITED", "任务发布过于频繁，请稍后重试");
+        return new BusinessException(HttpStatus.TOO_MANY_REQUESTS, "TASK_PUBLISH_RATE_LIMITED",
+                "短时间内提交的资料过多，请稍后重试；已经上传的文件不会丢失");
     }
 }

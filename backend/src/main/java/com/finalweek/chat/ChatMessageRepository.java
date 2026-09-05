@@ -21,6 +21,6 @@ public interface ChatMessageRepository extends BaseRepository<ChatMessage> {
             "order by created_at desc, id desc limit #{limit}", "</script>"})
     List<ChatMessage> page(UUID userId, UUID courseId, Instant before, int limit);
     @Select("select * from chat_message where course_id = #{courseId} and user_id = #{userId} " +
-            "and status = 'SUCCEEDED' and created_at &lt; #{before} order by created_at desc, id desc limit #{limit}")
+            "and status = 'SUCCEEDED' and created_at < #{before} order by created_at desc, id desc limit #{limit}")
     List<ChatMessage> recentSucceeded(UUID userId, UUID courseId, Instant before, int limit);
 }

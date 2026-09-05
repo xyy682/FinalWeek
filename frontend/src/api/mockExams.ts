@@ -1,7 +1,7 @@
 import { apiFetch } from './http'
 import type { TaskProgress } from './tasks'
 
-export type QuestionType = 'SINGLE_CHOICE' | 'MULTIPLE_CHOICE' | 'TRUE_FALSE' | 'FILL_BLANK' | 'SHORT_ANSWER' | 'CALCULATION' | 'ESSAY'
+export type QuestionType = 'SINGLE_CHOICE' | 'MULTIPLE_CHOICE' | 'TRUE_FALSE' | 'FILL_BLANK' | 'SHORT_ANSWER' | 'CALCULATION' | 'ESSAY' | 'COMPREHENSIVE'
 export type MockExamScope = 'WHOLE_COURSE' | 'OUTLINE_NODES'
 export type ScoreMode = 'AUTO' | 'CUSTOM'
 export interface MockExamInput {

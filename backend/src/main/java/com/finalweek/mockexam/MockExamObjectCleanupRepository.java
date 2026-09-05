@@ -10,7 +10,7 @@ import org.apache.ibatis.annotations.Select;
 public interface MockExamObjectCleanupRepository extends BaseRepository<MockExamObjectCleanup> {
     @Select("select * from mock_exam_object_cleanup where mock_exam_id = #{examId} for update")
     Optional<MockExamObjectCleanup> findByMockExamIdForUpdate(UUID examId);
-    @Select("select * from mock_exam_object_cleanup where status = 'PENDING' and next_attempt_at &lt;= #{now} " +
+    @Select("select * from mock_exam_object_cleanup where status = 'PENDING' and next_attempt_at <= #{now} " +
             "order by next_attempt_at limit #{limit} for update")
     List<MockExamObjectCleanup> findDueForUpdate(Instant now, int limit);
 }

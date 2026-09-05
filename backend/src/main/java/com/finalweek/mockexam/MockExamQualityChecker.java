@@ -39,8 +39,11 @@ public class MockExamQualityChecker {
     }
     private boolean replicatesSource(String stem, String source) {
         if (source.contains(stem)) return true;
+        int shorter = Math.min(stem.length(), source.length());
+        if (shorter >= 80 && stem.contains(source)) return true;
         var stemGrams = grams(stem); var sourceGrams = grams(source); var common = new HashSet<>(stemGrams);
-        common.retainAll(sourceGrams); return !stemGrams.isEmpty() && common.size() / (double) stemGrams.size() >= .90;
+        common.retainAll(sourceGrams); int denominator = Math.min(stemGrams.size(), sourceGrams.size());
+        return shorter >= 80 && denominator > 0 && common.size() / (double) denominator >= .90;
     }
     private Set<String> grams(String value) {
         var result = new HashSet<String>(); if (value.length() == 1) result.add(value);

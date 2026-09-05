@@ -53,25 +53,18 @@ public class MediaMaterialParser implements MaterialParser {
     }
 
     private List<ExtractedUnit> extractAudio(BackgroundTask task, Path source, Path work, boolean video) {
-        var pattern = work.resolve("audio-%03d.wav");
+        var audio = work.resolve("audio.wav");
         ExternalProcess.run(work, Duration.ofMinutes(3), "AUDIO_EXTRACT_FAILED",
                 List.of("ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", source.toString(),
-                        "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", "-f", "segment",
-                        "-segment_time", "60", pattern.toString()));
+                        "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", audio.toString()));
+        if (!Files.isRegularFile(audio)) throw new PermanentTaskException(
+                "AUDIO_EXTRACT_FAILED", "音视频未生成可转写音轨");
         var result = new ArrayList<ExtractedUnit>();
-        try (var paths = Files.list(work)) {
-            var audioFiles = paths.filter(path -> path.getFileName().toString().matches("audio-\\d{3}\\.wav"))
-                    .sorted().toList();
-            for (int index = 0; index < audioFiles.size(); index++) {
-                long offset = index * 60_000L;
-                for (var sentence : asr.recognize(task.getId(), audioFiles.get(index))) {
-                    long start = offset + sentence.startTimeMs(), end = offset + sentence.endTimeMs();
-                    result.add(new ExtractedUnit(video ? SourceType.VIDEO_TIME : SourceType.AUDIO_TIME,
-                            sentence.text(), null, null, null, start, end, sentence.text(), null));
-                }
-            }
-        } catch (RuntimeException exception) { throw exception; }
-        catch (Exception exception) { throw new PermanentTaskException("AUDIO_EXTRACT_FAILED", "音频分段读取失败"); }
+        for (var sentence : asr.recognize(task.getId(), audio)) {
+            result.add(new ExtractedUnit(video ? SourceType.VIDEO_TIME : SourceType.AUDIO_TIME,
+                    sentence.text(), null, null, null, sentence.startTimeMs(), sentence.endTimeMs(),
+                    sentence.text(), null));
+        }
         return result;
     }
 

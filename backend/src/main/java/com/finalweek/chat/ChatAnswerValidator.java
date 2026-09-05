@@ -25,8 +25,11 @@ public class ChatAnswerValidator {
         }
         var general = value.generalKnowledgeSupplement();
         if (general != null && general.length() > 10_000) throw invalid("通用知识补充过长");
-        return new GeneratedChatAnswer(value.answer().strip(), List.copyOf(unique),
-                general == null || general.isBlank() ? null : general.strip());
+        return new GeneratedChatAnswer(stripInternalRefs(value.answer()), List.copyOf(unique),
+                general == null || general.isBlank() ? null : stripInternalRefs(general));
+    }
+    private String stripInternalRefs(String value) {
+        return value.replaceAll("(?i)\\s*\\[[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}]", "").strip();
     }
     private BusinessException invalid(String message) { return new BusinessException(HttpStatus.BAD_GATEWAY,
             "CHAT_ANSWER_INVALID", message); }

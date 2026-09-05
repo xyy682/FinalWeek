@@ -1,6 +1,8 @@
 # Backend Structure — FinalWeek（求职版 MVP）
 
 > 文档状态：Phase 1–16 已完成。文末“Phase 12–16 扩展架构”对应已交付的迁移、MyBatis-Plus 模型与 Mapper、REST 接口、任务管线和测试要求。
+>
+> 当前实现总览见 [`GPT_CONTEXT.md`](GPT_CONTEXT.md)。本文件明确标注的 Phase 1–9 数据模型与旧 API 只用于解释迁移来源，不代表当前数据库和接口。
 
 ## Architecture
 
@@ -36,6 +38,8 @@ Spring Boot 是唯一应用服务和权限入口。求职版 MVP 中 RabbitMQ �
 | `ai` | ASR/OCR/Embedding/LLM 适配器 |
 
 ## Data Model
+
+本节先保留 Phase 1–9 的基础表模型，便于理解迁移来源；Phase 10 已把其中的 `parse_task` 迁移并扩展为当前 `background_task`。当前知识版本、通用任务、异步计划/答疑和模拟卷表结构以文末“Phase 12–16 扩展架构”为准。
 
 ### `user_account`
 
@@ -75,7 +79,7 @@ Spring Boot 是唯一应用服务和权限入口。求职版 MVP 中 RabbitMQ �
 
 已上传分片序号主要保存在 Redis Set；MySQL 保存任务归属、总量和最终状态，不为每个分片建业务表。
 
-### `parse_task`
+### `parse_task`（Phase 1–9 历史模型）
 
 - `id`, `user_id`, `course_id`, `material_id`
 - `task_type`：`PARSE_MATERIAL`、`GENERATE_OUTLINE`
@@ -209,7 +213,7 @@ Spring Boot 是唯一应用服务和权限入口。求职版 MVP 中 RabbitMQ �
 
 成功解析的资料禁止单独删除，`DELETE /materials/{materialId}` 返回 `409 MATERIAL_DELETE_FORBIDDEN`。待投递、投递失败、排队、失败或已取消的资料可按状态校验后单独删除；排队资料必须在同一事务中先 CAS 为 `CANCELLED`。处理中/重试中返回 `409 TASK_NOT_CANCELLABLE`，成功资料只能随整门课程删除。
 
-`POST /materials/{materialId}/retry` 只接受 `FAILED` 任务：复用原 `taskId`、business key 和 checkpoint，增加 `manual_retry_count` 与 `execution_round`，把当前轮次的 `delivery_attempt_count` 重置后重新投递。对应 `failed_task` 变为 `REDELIVERED`；任务最终成功后变为 `RESOLVED`。该操作不得创建新 material 或第二条 parse_task。
+`POST /materials/{materialId}/retry` 只接受 `FAILED` 任务：复用原 `taskId`、business key 和 checkpoint，增加 `manual_retry_count` 与 `execution_round`，把当前轮次的 `delivery_attempt_count` 重置后重新投递。对应 `failed_task` 变为 `REDELIVERED`；任务最终成功后变为 `RESOLVED`。当前实现不得创建新 material 或第二条 `background_task`。
 
 ### Task and SSE
 
@@ -224,8 +228,9 @@ SSE 事件：`eventId`、`taskId`、`status`、`stage`、`progress`、`message`�
 ### Outline
 
 - `GET /courses/{courseId}/outline`
-- `POST /courses/{courseId}/outline/generate`
 - `PATCH /outline-nodes/{nodeId}/importance`
+
+提纲不再通过公开的手动 generate 接口创建。当前由 `POST /courses/{courseId}/knowledge-versions` 确认成功资料集合并自动创建提纲任务；`GET /courses/{courseId}/knowledge-version` 返回当前发布版本和确认状态。
 
 ### Plan
 
@@ -262,7 +267,7 @@ SSE 事件：`eventId`、`taskId`、`status`、`stage`、`progress`、`message`�
 3. 校验 0..N-1 分片均存在。
 4. 按序合并到临时文件并计算完整哈希。
 5. 上传最终对象，在同一 MySQL 事务中写入 material 与状态为 `PENDING_PUBLISH` 的 parse_task。
-6. 提交事务后先获取 RabbitMQ 用户级/全局限流令牌。未通过时只把仍为 `PENDING_PUBLISH` 的任务改为 `PUBLISH_FAILED` 并记录 `AI_RATE_LIMITED`，不回滚 material/上传结果，也不发送消息；接口返回同一 material/task，供用户稍后重新投递。
+6. 提交事务后先获取 RabbitMQ 用户级/全局发布保护令牌（默认 30/120 次每分钟）。未通过时只把仍为 `PENDING_PUBLISH` 的任务改为 `PUBLISH_FAILED` 并记录 `AI_RATE_LIMITED`，不回滚 material/上传结果，也不发送消息；接口返回同一 material/task，供用户稍后重新投递。
 7. 限流通过后发布 RabbitMQ persistent message 并等待 publisher confirm：成功则以条件更新将仍为 `PENDING_PUBLISH` 的任务改为 `QUEUED`；失败/超时只把仍为 `PENDING_PUBLISH` 的任务改为 `PUBLISH_FAILED`。若消费者已先把状态推进到 `PROCESSING` 或其他后续状态，confirm 回调不得倒退状态。
 8. 设置 completed key，清理临时分片。重新调用 complete 返回同一 material/task；`PUBLISH_FAILED` 由重新投递接口继续，不创建第二个任务。
 
@@ -287,14 +292,14 @@ MinIO 与 MySQL 没有分布式事务。使用确定性对象键、唯一业务�
 ### Consumer Flow
 
 1. 校验消息字段和任务归属。
-2. 使用 MySQL compare-and-set 将 `PENDING_PUBLISH`/`PUBLISH_FAILED`/`QUEUED`/`RETRYING` 推进到 `PROCESSING`；消息合法到达本身证明已经投递，可安全处理 confirm 回调尚未回写或 confirm 超时后延迟到达的消息。若任务已 `CANCELLED`、`SUCCEEDED` 或 `FAILED`，直接 ack。Redisson 任务锁只减少并发，不替代此状态检查。
+2. 使用 MySQL CAS 将可执行状态推进到 `PROCESSING`，并原子写入 `processing_owner=messageId` 与 `processing_lease_until`；只有更新一行的消费者获得执行权。消费者不再使用职责重叠的 Redisson 任务锁。
 3. 查询任务终态；已成功则直接 ack。
 4. 查询最近成功 checkpoint，从下一阶段执行。
 5. 每阶段先完成幂等结果写入，再在 MySQL 事务中写 checkpoint 和任务阶段；checkpoint 永远最后提交。
 6. 全部完成后更新资料、任务状态并 ack。
 7. 异常按类型决定外部 API 重试、MQ 重投或永久失败。外部 API 单次调用最多执行 3 次（首次 + 2 次重试），记录 `api_attempt_count`；任务最多执行 3 次（首次消费 + 2 次重投），记录 `delivery_attempt_count`。不可重试错误立即失败，两类预算不得相乘后伪装成同一计数。
 
-锁用于减少并发执行；MySQL 唯一键、状态检查和可重复写才是最终幂等保障。
+任务执行权由 MySQL CAS 租约控制：执行期间心跳续租，成功、失败和重试更新校验 owner；租约过期后扫描器 CAS 回收为 `PENDING_PUBLISH` 并重新投递。checkpoint、唯一键、稳定 ID 和可重复写负责处理已发生的重复副作用。Redisson 仅保留在上传合并、内容哈希和 Lucene 写入等独立临界区。
 
 ### Cancellation
 
@@ -317,7 +322,7 @@ MinIO 与 MySQL 没有分布式事务。使用确定性对象键、唯一业务�
 - PDFBox 提取 PDF 原生文字；低文字密度页渲染后 OCR。
 - POI 提取 PPTX 文本；必要时 LibreOffice 转 PDF 后 OCR。
 - TXT/MD 按段落读取。
-- FFmpeg 提取音频并分段，Spring Boot 从 MinIO 读取分段后通过 `paraformer-realtime-v2` Java 本地文件/音频流接口调用 ASR；不向百炼提供无法公网访问的本地 MinIO URL。
+- FFmpeg 为整份媒体提取一个 16 kHz 单声道 WAV，Spring Boot 通过 `paraformer-realtime-v2` Java SDK 本地文件非流式调用 ASR；应用层不再做 60 秒 ASR 切片；不向百炼提供无法公网访问的本地 MinIO URL。
 - MP4 抽取关键帧、感知哈希去重并 OCR。
 - 将结果标准化为带位置的临时 CourseContext。
 - PDF/PPTX 同时生成确定性对象键的归一化预览 PDF；重复执行覆盖同一对象。
@@ -338,7 +343,7 @@ MinIO 与 MySQL 没有分布式事务。使用确定性对象键、唯一业务�
 
 ### `OUTLINE_GENERATED`
 
-- 只用于用户主动生成提纲的独立任务。
+- 只用于确认知识版本后自动创建、或失败后按原版本重试的独立提纲任务。
 - 检索相关课程片段，调用 LLM 返回 JSON 树。
 - 验证引用、层级和重要度后替换当前提纲。
 
@@ -483,7 +488,7 @@ Lucene 索引损坏、丢失或首次初始化时可由 `course_segment` 全量�
 
 仍保持单 Spring Boot JVM、单 RabbitMQ 任务基础设施和包级模块，不拆 Python Worker、微服务或独立 PDF 服务。
 
-### Target Data Model
+### Current Data Model
 
 #### `course_knowledge_version`
 
@@ -532,7 +537,7 @@ Lucene 索引损坏、丢失或首次初始化时可由 `course_segment` 全量�
 #### `mock_exam_question`
 
 - 字段至少包含 `id`, `mock_exam_id`, `position`, `section_position`, `question_type`, `stem`, `options_json`, `answer_json`, `score`, `uses_general_knowledge`, `formula_metadata_json`。
-- 题型枚举固定为 `SINGLE_CHOICE`、`MULTIPLE_CHOICE`、`TRUE_FALSE`、`FILL_BLANK`、`SHORT_ANSWER`、`CALCULATION`、`ESSAY`。
+- 题型枚举固定为 `SINGLE_CHOICE`、`MULTIPLE_CHOICE`、`TRUE_FALSE`、`FILL_BLANK`、`SHORT_ANSWER`、`CALCULATION`、`ESSAY`、`COMPREHENSIVE`。
 - `options_json` 只用于选择题；`answer_json` 按题型保存正确选项、按空答案、参考文本或必要计算步骤。位置在同一试卷内唯一。
 
 #### `mock_exam_question_source`
@@ -540,7 +545,7 @@ Lucene 索引损坏、丢失或首次初始化时可由 `course_segment` 全量�
 - `question_id`, `segment_id` 联合唯一。课程内题至少一个来源，来源必须属于任务知识版本的资料集合和模型允许上下文。
 - 通用知识题不得伪造 segment 来源；其 `uses_general_knowledge=true`，只在参考答案模板中显示标识。
 
-### Target REST API
+### Current REST API
 
 所有接口继续使用 `/api/v1`、Cookie Session、CSRF、课程 ownership 隔离和统一错误体。
 
@@ -555,7 +560,7 @@ Lucene 索引损坏、丢失或首次初始化时可由 `course_segment` 全量�
 
 #### Plan and Chat
 
-- `POST /courses/{courseId}/plan/generate` 保留幂等键和请求体，目标态改为返回 `202 {taskId, requestId}`，不在 HTTP 请求内等待模型。
+- `POST /courses/{courseId}/plan/generate` 保留幂等键和请求体，当前返回 `202 {taskId, requestId}`，不在 HTTP 请求内等待模型。
 - `GET /courses/{courseId}/plan` 继续返回唯一计划，增加 `knowledgeVersion` 和 `stale`。
 - `POST /courses/{courseId}/messages` 保存问题和后台任务，返回 `202` 的 `PENDING` 消息；分页和重试接口继续恢复最终结果。
 
@@ -581,10 +586,10 @@ Lucene 索引损坏、丢失或首次初始化时可由 `course_segment` 全量�
 
 ### Mock Exam Generation Pipeline
 
-1. `REQUIREMENTS_ANALYZED`：校验七类题型、逐题型题数、1–50 总题数、整数分值/1000 上限、可选 1–300 分钟时长、2000 字说明和结构化字段冲突；构造知识版本上下文。
+1. `REQUIREMENTS_ANALYZED`：校验八类题型、逐题型题数、1–50 总题数、整数分值/1000 上限、可选 1–300 分钟时长、2000 字说明和结构化字段冲突；构造知识版本上下文。
 2. 识别真题信号时同时参考 `MaterialType.PAST_EXAM` 和内容中的历年卷结构；教师例题只从内容结构识别。用户要求优先，真题其次，例题再次，不复刻原题。
-3. `QUESTIONS_GENERATED`：LLM 只返回固定 JSON Schema。课程资料优先；允许通用知识时仅补足确实缺失的题型/题量，不联网。
-4. `PAPER_VALIDATED`：Java 校验题型数量、选项、答案完整性、分值、范围、segment ownership、通用知识标识、受支持公式命令和内部一致性。
+3. `QUESTIONS_GENERATED`：按用户选定题型拆分批次，最多两路并发调用 LLM；每个批次独立校验，格式、来源或原题复刻失败时只重试该题型，成功后再合并为固定 JSON Schema。课程资料优先；允许通用知识时仅补足确实缺失的题型/题量，不联网。
+4. `PAPER_VALIDATED`：Java 校验题型数量、选择题严格四选项、答案完整性、分值、范围、segment ownership、通用知识标识、受支持公式命令和内部一致性；模型误给非选择题附带的 options 会被确定性清空。
 5. 对源真题/例题及本课程历史题做规范化相似度检查。直接复刻属于硬失败；历史近似和范围未完全覆盖记录为警告，允许发布。
 6. `PDFS_GENERATED`：从同一份已校验结构化题目渲染试卷与参考答案，防止两个文件答案漂移。
 7. 两个 PDF 都通过打开、非空、页数和对象存储校验后，事务写入对象键并标记成功；任何部分失败都删除/登记清理临时对象且不发布。
@@ -594,7 +599,7 @@ Lucene 索引损坏、丢失或首次初始化时可由 `course_segment` 全量�
 - 只使用仓库内受版本控制的试卷/参考答案模板和允许的宏；用户、资料和模型文本必须经过 TeX 转义，不得作为命令、路径或模板片段执行。
 - 公式字段只允许经过解析校验的常见数学 LaTeX 子集；禁止文件读写、网络、shell、宏定义、包加载和动态 include 命令。
 - 以非特权用户在每任务独立临时目录运行 `xelatex -no-shell-escape`，设置编译超时、输出大小限制和进程退出校验；不把 RabbitMQ 文本直接拼成命令行。
-- 模板使用 A4、Noto CJK 字体、姓名/学号栏、题型分区、题目分值和答题空间。无输入总分/时长时不显示卷首字段。
+- 模板使用 A4、Noto CJK 字体、姓名/学号栏、题型分区、题目分值和答题空间。试卷模板 `v2` 将每题渲染为独立编号块：题干固定正文宽度、分值固定栏右对齐、选项使用嵌套列表，并在结束段落后按题型预留作答空间；无输入总分/时长时不显示卷首字段。
 - PDF 不显示生成日期、知识版本或 AI 标识；通用知识题只在参考答案中标明。
 
 ### Deletion and Cleanup
@@ -603,7 +608,7 @@ Lucene 索引损坏、丢失或首次初始化时可由 `course_segment` 全量�
 - 对象删除采用独立、不可见的可重试清理记录/队列，不出现在全局任务列表。对象键必须确定且受 mock exam ID 隔离。
 - 管理员跨存储核对增加模拟卷白名单和孤儿 PDF 统计。课程逻辑删除后，模拟卷查询和文件授权立即失效；最终清理覆盖记录、题目、来源和两个 PDF。
 
-### Target Error Codes
+### Current Error Codes
 
 - `KNOWLEDGE_VERSION_MATERIALS_BUSY`、`KNOWLEDGE_VERSION_EMPTY`、`KNOWLEDGE_VERSION_UNCHANGED`、`KNOWLEDGE_VERSION_STALE`。
 - `PLAN_GENERATION_IN_PROGRESS`、`PLAN_KNOWLEDGE_VERSION_CHANGED`。
@@ -611,16 +616,16 @@ Lucene 索引损坏、丢失或首次初始化时可由 `course_segment` 全量�
 - `MOCK_EXAM_SOURCE_INSUFFICIENT`、`MOCK_EXAM_FORMAT_INVALID`、`MOCK_EXAM_SOURCE_INVALID`、`MOCK_EXAM_FORMULA_UNSAFE`。
 - `MOCK_EXAM_PDF_FAILED`、`MOCK_EXAM_NOT_FOUND`、`MOCK_EXAM_NOT_CANCELLABLE`、`MOCK_EXAM_NOT_DELETABLE`、`MOCK_EXAM_FILE_NOT_READY`。
 
-### Target Required Tests
+### Current Required Tests
 
 - 资料确认时的服务端状态复查、失败资料忽略、空集合拒绝、相同集合幂等和并发确认。
 - 新旧知识版本发布、失败保留旧版、人工重要度不继承、旧版模拟卷继续完成和计划版本变化拒绝发布。
 - 活动任务跨课程查询、可见类型过滤、排队取消与 consumer claim 竞争、SSE 断线 REST 恢复。
 - 答疑离页后完成、全部成功资料立即可检索、任务不出现在抽屉、原消息重试不重复。
-- 七类题型 DTO/Schema、题数 1–50、分值汇总/1000 上限、时长 1–300、补充说明长度及冲突校验。
+- 八类题型 DTO/Schema、题数 1–50、分值汇总/1000 上限、时长 1–300、补充说明长度及冲突校验。
 - 严格资料模式失败、必要通用知识补足与参考答案标识、非法或跨版本来源拒绝。
 - 真题/例题风格信号、源题复刻拒绝、历史近似警告、知识点覆盖不足警告。
 - TeX 转义、危险命令拒绝、公式白名单、编译超时、中文/公式分页、两个 PDF 内容一致和原子发布。
 - 历史分页与 ownership、短时预览/下载、重试关联、逻辑删除立即不可见、后台清理幂等及课程级清理。
 
-上述测试已纳入 Phase 16 自动化、真实 Docker 与外部 AI 验收；实际结果见 `docs/TEST_REPORT.md`。
+上述能力已纳入 Phase 16 自动化与真实 Docker 验收；外部 AI 的 14 条真实报告覆盖当时的原七类题型，后续综合题仅有自动化回归、尚未重新运行付费 Golden Eval。实际结果见 `docs/TEST_REPORT.md`。

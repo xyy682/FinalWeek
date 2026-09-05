@@ -8,6 +8,7 @@
 2. [02-核心流程链路.md](02-核心流程链路.md)：按一次真实请求理解数据和状态如何流动。
 3. [03-简历逐行亮点与面试拷打.md](03-简历逐行亮点与面试拷打.md)：对应简历六条亮点逐项准备。
 4. [04-综合面试题与口述模板.md](04-综合面试题与口述模板.md)：练习开场介绍、架构追问、故障场景和 AI Coding 真实性问题。
+5. [05-MyBatis-Plus重构专项.md](05-MyBatis-Plus重构专项.md)：理解从 JPA 改为 MyBatis-Plus 后，代码模型、SQL、事务和面试口径发生了什么变化。
 
 ## 一句话定位
 
@@ -20,6 +21,7 @@ FinalWeek 是面向大学生期末复习的多模态课程资料 RAG 系统：�
 - 不要把项目说成微服务。当前是一个 Spring Boot 模块化单体，Web API 与 RabbitMQ Consumer 在同一 JVM，且只支持单后端实例。
 - 不要声称做过生产压测、生产 SLA、集群高可用或海量用户验证。README 已明确这些属于项目边界。
 - 回答问题时优先使用“状态机、唯一约束、CAS、稳定 ID、checkpoint、补偿”这些具体机制，少用“保证高可用”一类空泛表述。
+- 持久层已经从 JPA 重构为 MyBatis-Plus。代码中虽然继续使用 `*Repository` 命名以及 `saveAndFlush` 兼容方法，但它们是 MyBatis Mapper/持久化门面，不是 Spring Data JPA Repository，也不存在 Hibernate 持久化上下文或脏检查。
 
 ## 代码与设计入口
 
@@ -28,4 +30,3 @@ FinalWeek 是面向大学生期末复习的多模态课程资料 RAG 系统：�
 - 后端设计：[BACKEND_STRUCTURE.md](D:/学习项目/FinalWeek/docs/BACKEND_STRUCTURE.md)
 - 技术选型：[TECH_STACK.md](D:/学习项目/FinalWeek/docs/TECH_STACK.md)
 - 测试报告：[TEST_REPORT.md](D:/学习项目/FinalWeek/docs/TEST_REPORT.md)
-

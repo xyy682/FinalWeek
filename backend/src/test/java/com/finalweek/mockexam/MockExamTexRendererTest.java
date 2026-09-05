@@ -15,7 +15,7 @@ class MockExamTexRendererTest {
                 new GeneratedMockExam.Formula("x=42", "answer")));
         var renderer = new MockExamTexRenderer(new TexEscaper(), new MockExamFormulaValidator());
         var documents = renderer.render(exam, new GeneratedMockExam(List.of(question)));
-        assertThat(documents.paperTex()).contains("数据库\\_期末\\%卷", "1.}", "[2 分]", "\\item 乙")
+        assertThat(documents.paperTex()).contains("数据库\\_期末\\%卷", "start=1", "\\item \\questionline{", "{2}", "\\item 乙", "\\end{enumerate}")
                 .doesNotContain("使用通用知识补充", "x=42", "@@");
         assertThat(documents.answerTex()).contains("数据库\\_期末\\%卷", "1.}", "B", "使用通用知识补充", "1<2", "x=42")
                 .doesNotContain("@@");

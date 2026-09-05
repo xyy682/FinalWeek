@@ -22,6 +22,8 @@ public class BackgroundTask {
     private int apiAttemptCount;
     private int manualRetryCount;
     private int executionRound;
+    private String processingOwner;
+    private Instant processingLeaseUntil;
     private Long generationVersion;
     private String businessKey;
     private String errorCode;
@@ -71,6 +73,8 @@ public class BackgroundTask {
     public int getApiAttemptCount() { return apiAttemptCount; }
     public int getManualRetryCount() { return manualRetryCount; }
     public int getExecutionRound() { return executionRound; }
+    public String getProcessingOwner() { return processingOwner; }
+    public Instant getProcessingLeaseUntil() { return processingLeaseUntil; }
     public Long getGenerationVersion() { return generationVersion; }
     public String getBusinessKey() { return businessKey; }
     public String getErrorCode() { return errorCode; }

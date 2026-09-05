@@ -1,0 +1,138 @@
+{
+  "run_id": "20260822-115034",
+  "materials": 5,
+  "loads": [
+    1,
+    5,
+    10,
+    20
+  ],
+  "duplicate_deliveries": 180.0,
+  "changed_materials": 0,
+  "duplicate_business_result_count": 0,
+  "unchanged_materials": 5,
+  "dlq_before": 15,
+  "dlq_after": 15,
+  "comparisons": [
+    {
+      "task_id": "706c91dc-f649-4495-8374-e43a2f539640",
+      "material_id": "ba276340-e803-42f3-9b5f-65f3a3a7e043",
+      "course_id": "f5e2bc22-b232-48aa-a57a-55f2daa3b43c",
+      "before": {
+        "task_status": "SUCCEEDED",
+        "delivery_attempts": 1,
+        "api_attempts": 1,
+        "checkpoint_count": 5,
+        "segment_count": 1,
+        "qdrant_count": 1,
+        "lucene_hash": "a8c42bf1a6a750ac995c1051f137e6d50b910b695644424dbee603b273437362"
+      },
+      "after": {
+        "task_status": "SUCCEEDED",
+        "delivery_attempts": 1,
+        "api_attempts": 1,
+        "checkpoint_count": 5,
+        "segment_count": 1,
+        "qdrant_count": 1,
+        "lucene_hash": "a8c42bf1a6a750ac995c1051f137e6d50b910b695644424dbee603b273437362"
+      },
+      "business_results_unchanged": true
+    },
+    {
+      "task_id": "f1789a2f-afbd-402c-846a-85c3d9de418d",
+      "material_id": "4ac894ff-212a-45f2-a017-0b01d56020dc",
+      "course_id": "c1ad16bf-1dc1-47a8-80d9-9ea29e32673d",
+      "before": {
+        "task_status": "SUCCEEDED",
+        "delivery_attempts": 1,
+        "api_attempts": 1,
+        "checkpoint_count": 5,
+        "segment_count": 1,
+        "qdrant_count": 1,
+        "lucene_hash": "c0c075548bfa114c623a0eea6b00a804e4407c79999af069d353ba7dfd705a7d"
+      },
+      "after": {
+        "task_status": "SUCCEEDED",
+        "delivery_attempts": 1,
+        "api_attempts": 1,
+        "checkpoint_count": 5,
+        "segment_count": 1,
+        "qdrant_count": 1,
+        "lucene_hash": "c0c075548bfa114c623a0eea6b00a804e4407c79999af069d353ba7dfd705a7d"
+      },
+      "business_results_unchanged": true
+    },
+    {
+      "task_id": "6f4fb138-7d89-48f1-bed2-4436ef473a40",
+      "material_id": "cf32e32e-c660-42ff-a216-deef534ea7e1",
+      "course_id": "b4020c89-10a3-40a1-9d3e-ca855a48aa50",
+      "before": {
+        "task_status": "SUCCEEDED",
+        "delivery_attempts": 1,
+        "api_attempts": 1,
+        "checkpoint_count": 5,
+        "segment_count": 2,
+        "qdrant_count": 2,
+        "lucene_hash": "44b81cb793e9636c05c0759fc4d61518d730302a822ed0e5d6dc2843f8cb995f"
+      },
+      "after": {
+        "task_status": "SUCCEEDED",
+        "delivery_attempts": 1,
+        "api_attempts": 1,
+        "checkpoint_count": 5,
+        "segment_count": 2,
+        "qdrant_count": 2,
+        "lucene_hash": "44b81cb793e9636c05c0759fc4d61518d730302a822ed0e5d6dc2843f8cb995f"
+      },
+      "business_results_unchanged": true
+    },
+    {
+      "task_id": "6c804d9d-8a44-46d2-a730-20ab2aeac966",
+      "material_id": "c8c64274-ab21-407a-b802-0bba4ac38918",
+      "course_id": "b4020c89-10a3-40a1-9d3e-ca855a48aa50",
+      "before": {
+        "task_status": "SUCCEEDED",
+        "delivery_attempts": 1,
+        "api_attempts": 1,
+        "checkpoint_count": 5,
+        "segment_count": 3,
+        "qdrant_count": 3,
+        "lucene_hash": "44b81cb793e9636c05c0759fc4d61518d730302a822ed0e5d6dc2843f8cb995f"
+      },
+      "after": {
+        "task_status": "SUCCEEDED",
+        "delivery_attempts": 1,
+        "api_attempts": 1,
+        "checkpoint_count": 5,
+        "segment_count": 3,
+        "qdrant_count": 3,
+        "lucene_hash": "44b81cb793e9636c05c0759fc4d61518d730302a822ed0e5d6dc2843f8cb995f"
+      },
+      "business_results_unchanged": true
+    },
+    {
+      "task_id": "1cdd57fa-763e-4d26-915d-19b958d4ba3f",
+      "material_id": "51e03fb9-dd57-4d8b-a923-6798c4109895",
+      "course_id": "0586706e-3669-45da-92f0-bfe16d0e9b4e",
+      "before": {
+        "task_status": "SUCCEEDED",
+        "delivery_attempts": 1,
+        "api_attempts": 1,
+        "checkpoint_count": 5,
+        "segment_count": 2,
+        "qdrant_count": 2,
+        "lucene_hash": "249cd709c997ca237c2a2fd0bc98a5c4386b214f565ee614dce49f247882c295"
+      },
+      "after": {
+        "task_status": "SUCCEEDED",
+        "delivery_attempts": 1,
+        "api_attempts": 1,
+        "checkpoint_count": 5,
+        "segment_count": 2,
+        "qdrant_count": 2,
+        "lucene_hash": "249cd709c997ca237c2a2fd0bc98a5c4386b214f565ee614dce49f247882c295"
+      },
+      "business_results_unchanged": true
+    }
+  ]
+}

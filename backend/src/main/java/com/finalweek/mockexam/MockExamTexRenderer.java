@@ -31,18 +31,22 @@ public class MockExamTexRenderer {
         for (var type : MockExamQuestionType.values()) {
             var values = generated.questions().stream().filter(q -> q.questionType() == type).toList();
             if (values.isEmpty()) continue;
-            result.append("\\section*{").append(label(type)).append("}\n");
+            result.append("\\par\\filbreak\n\\section*{").append(label(type)).append("}\n")
+                    .append("\\begin{enumerate}[label=\\textbf{\\arabic*.},start=").append(number)
+                    .append(",leftmargin=2.35em,labelsep=0.65em,itemsep=1.05em,parsep=0pt,topsep=0.45em]\n");
             for (var q : values) {
-                result.append("\\textbf{").append(number++).append(".} ")
-                        .append(escaper.escape(q.stem())).append(" \\hfill [").append(q.score()).append(" 分]\n");
+                result.append("\\item \\questionline{").append(escaper.escape(q.stem())).append("}{")
+                        .append(q.score()).append("}\n");
                 formulas(q, false).forEach(value -> result.append("\\[ ").append(value).append(" \\]\n"));
                 if (q.options() != null && !q.options().isEmpty()) {
-                    result.append("\\begin{enumerate}[label=\\Alph*.,leftmargin=2.4em,itemsep=0.2em]\n");
+                    result.append("\\begin{enumerate}[label=\\Alph*.,leftmargin=2.2em,itemsep=0.12em,topsep=0.35em]\n");
                     q.options().forEach(option -> result.append("\\item ").append(escaper.escape(option)).append('\n'));
                     result.append("\\end{enumerate}\n");
                 }
                 result.append(answerSpace(q.questionType())).append('\n');
+                number++;
             }
+            result.append("\\end{enumerate}\n");
         }
         return result.toString();
     }
@@ -69,7 +73,7 @@ public class MockExamTexRenderer {
             case TRUE_FALSE -> Boolean.TRUE.equals(a.trueFalseAnswer()) ? "正确" : "错误";
             case FILL_BLANK -> { var parts = new ArrayList<String>(); for (int i = 0; i < a.blanks().size(); i++)
                 parts.add((i + 1) + ". " + escaper.escape(a.blanks().get(i))); yield String.join("；", parts); }
-            case SHORT_ANSWER, ESSAY -> escaper.escape(a.referenceAnswer());
+            case SHORT_ANSWER, ESSAY, COMPREHENSIVE -> escaper.escape(a.referenceAnswer());
             case CALCULATION -> {
                 var parts = new ArrayList<String>(); if (a.steps() != null) a.steps().forEach(v -> parts.add(escaper.escape(v)));
                 parts.add("最终答案：" + escaper.escape(a.finalAnswer())); yield String.join("\\par ", parts);
@@ -83,16 +87,18 @@ public class MockExamTexRenderer {
     }
     private String answerSpace(MockExamQuestionType type) {
         return switch (type) {
-            case SINGLE_CHOICE, MULTIPLE_CHOICE, TRUE_FALSE -> "\\vspace{0.7em}";
-            case FILL_BLANK -> "\\vspace{1.2em}";
-            case SHORT_ANSWER -> "\\vspace{4em}";
-            case CALCULATION -> "\\vspace{7em}";
-            case ESSAY -> "\\vspace{9em}";
+            case SINGLE_CHOICE, MULTIPLE_CHOICE, TRUE_FALSE -> "\\par";
+            case FILL_BLANK -> "\\par\\addvspace{0.7em}";
+            case SHORT_ANSWER -> "\\par\\addvspace{4\\baselineskip}";
+            case CALCULATION -> "\\par\\addvspace{7\\baselineskip}";
+            case ESSAY -> "\\par\\addvspace{9\\baselineskip}";
+            case COMPREHENSIVE -> "\\par\\addvspace{12\\baselineskip}";
         };
     }
     private String label(MockExamQuestionType type) { return switch (type) {
         case SINGLE_CHOICE -> "单项选择题"; case MULTIPLE_CHOICE -> "多项选择题"; case TRUE_FALSE -> "判断题";
         case FILL_BLANK -> "填空题"; case SHORT_ANSWER -> "简答题"; case CALCULATION -> "计算题"; case ESSAY -> "论述题";
+        case COMPREHENSIVE -> "综合题";
     }; }
     private String fill(String template, String title, String meta, String body) { return template
             .replace("@@TITLE@@", title).replace("@@META@@", meta).replace("@@BODY@@", body); }

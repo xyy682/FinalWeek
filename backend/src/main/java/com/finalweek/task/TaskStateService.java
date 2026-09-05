@@ -8,6 +8,7 @@ import com.finalweek.course.CourseRepository;
 import com.finalweek.plan.PlanRequestCoordinator;
 import com.finalweek.chat.ChatCoordinator;
 import com.finalweek.mockexam.MockExamCoordinator;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -66,18 +67,18 @@ public class TaskStateService {
     }
 
     @Transactional
-    public boolean claim(UUID id, int round, int maximum) {
-        return changed(tasks.claim(id, round, maximum), id, MaterialStatus.PROCESSING);
+    public boolean claim(UUID id, int round, int maximum, String owner, Instant leaseUntil) {
+        return changed(tasks.claim(id, round, maximum, owner, leaseUntil), id, MaterialStatus.PROCESSING);
     }
 
     @Transactional
-    public void retrying(UUID id, int round, String code, String message) {
-        changed(tasks.markRetrying(id, round, code, truncate(message)), id, MaterialStatus.RETRYING);
+    public boolean retrying(UUID id, int round, String owner, String code, String message) {
+        return changed(tasks.markRetrying(id, round, owner, code, truncate(message)), id, MaterialStatus.RETRYING);
     }
 
     @Transactional
-    public void failed(UUID id, int round, String messageId, String code, String message) {
-        if (tasks.markFailed(id, round, code, truncate(message)) == 1) {
+    public boolean failed(UUID id, int round, String owner, String messageId, String code, String message) {
+        if (tasks.markFailed(id, round, owner, code, truncate(message)) == 1) {
             var task = tasks.findById(id).orElseThrow();
             if (task.getTaskType() == TaskType.PARSE_MATERIAL) {
                 materials.updateStatus(task.getMaterialId(), MaterialStatus.FAILED);
@@ -91,12 +92,14 @@ public class TaskStateService {
             if (task.getTaskType() == TaskType.GENERATE_MOCK_EXAM) mockExams.fail(task.getBusinessId(), code, truncate(message));
             if (failedTasks.findByMessageId(messageId).isEmpty()) failedTasks.save(new FailedTask(task, messageId, truncate(message)));
             progress.publish(task);
+            return true;
         }
+        return false;
     }
 
     @Transactional
-    public void succeeded(UUID id, int round) {
-        if (tasks.markSucceeded(id, round) != 1) return;
+    public boolean succeeded(UUID id, int round, String owner) {
+        if (tasks.markSucceeded(id, round, owner) != 1) return false;
         var task = tasks.findById(id).orElseThrow();
         if (checkpoints.findByTask_IdAndStage(id, TaskStage.COMPLETED).isEmpty()) {
             checkpoints.save(new TaskCheckpoint(task, TaskStage.COMPLETED, null, "{\"indexed\":true}"));
@@ -109,6 +112,16 @@ public class TaskStateService {
             value.markResolved(); failedTasks.save(value);
         });
         progress.publish(task);
+        return true;
+    }
+
+    @Transactional
+    public java.util.Optional<BackgroundTask> recoverExpiredLease(
+            UUID id, int round, String owner, Instant expiredBefore) {
+        if (owner == null || tasks.recoverExpiredProcessingLease(id, round, owner, expiredBefore) != 1) {
+            return java.util.Optional.empty();
+        }
+        return java.util.Optional.of(refresh(id, MaterialStatus.PENDING_PUBLISH));
     }
 
     @Transactional

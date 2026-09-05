@@ -12,9 +12,9 @@
         "type": "object", "additionalProperties": false,
         "required": ["questionType", "stem", "options", "answer", "score", "usesGeneralKnowledge", "sourceSegmentIds", "formulas"],
         "properties": {
-          "questionType": { "enum": ["SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE", "FILL_BLANK", "SHORT_ANSWER", "CALCULATION", "ESSAY"] },
+          "questionType": { "enum": ["SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE", "FILL_BLANK", "SHORT_ANSWER", "CALCULATION", "ESSAY", "COMPREHENSIVE"] },
           "stem": { "type": "string", "minLength": 1, "maxLength": 10000 },
-          "options": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 2000 } },
+          "options": { "type": "array", "maxItems": 4, "items": { "type": "string", "minLength": 1, "maxLength": 2000 } },
           "answer": {
             "type": "object", "additionalProperties": false,
             "required": ["correctOptionIndexes", "trueFalseAnswer", "blanks", "referenceAnswer", "steps", "finalAnswer"],
@@ -31,7 +31,12 @@
           "usesGeneralKnowledge": { "type": "boolean" },
           "sourceSegmentIds": { "type": "array", "uniqueItems": true, "items": { "type": "string", "format": "uuid" } },
           "formulas": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["expression", "location"], "properties": { "expression": { "type": "string", "minLength": 1, "maxLength": 500 }, "location": { "enum": ["stem", "answer"] } } } }
-        }
+        },
+        "allOf": [{
+          "if": { "properties": { "questionType": { "enum": ["SINGLE_CHOICE", "MULTIPLE_CHOICE"] } }, "required": ["questionType"] },
+          "then": { "properties": { "options": { "minItems": 4, "maxItems": 4 } } },
+          "else": { "properties": { "options": { "maxItems": 0 } } }
+        }]
       }
     }
   }

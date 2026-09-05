@@ -1,0 +1,5 @@
+"endpoint","elapsed_ms","status","task_id"
+"material_parse_acceptance","81.394","202","706c91dc-f649-4495-8374-e43a2f539640"
+"outline_acceptance","60.184","202","a639d41d-a64e-4c53-8f06-99caad871e4f"
+"plan_acceptance","107.569","202","efbc99d0-f2a7-4d5b-b373-23ca8cb6a709"
+"mock_exam_acceptance","119.829","202","4cc08062-4a92-4c4e-b7ee-0edd6d2cfb45"

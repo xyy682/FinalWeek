@@ -2,28 +2,31 @@ package com.finalweek.ai;
 
 import com.alibaba.dashscope.audio.asr.recognition.Recognition;
 import com.alibaba.dashscope.audio.asr.recognition.RecognitionParam;
-import com.alibaba.dashscope.audio.asr.recognition.RecognitionResult;
-import com.alibaba.dashscope.common.ResultCallback;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.finalweek.common.config.FinalWeekProperties;
 import com.finalweek.task.BackgroundTaskRepository;
 import com.finalweek.task.PermanentTaskException;
 import com.finalweek.task.RetryableTaskException;
-import java.nio.ByteBuffer;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicReference;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
 public class BailianAsrClient implements AsrClient {
+    private static final Logger log = LoggerFactory.getLogger(BailianAsrClient.class);
     private final FinalWeekProperties properties;
     private final BackgroundTaskRepository tasks;
-    public BailianAsrClient(FinalWeekProperties properties, BackgroundTaskRepository tasks) {
-        this.properties = properties; this.tasks = tasks;
+    private final ObjectMapper mapper;
+
+    public BailianAsrClient(FinalWeekProperties properties, BackgroundTaskRepository tasks, ObjectMapper mapper) {
+        this.properties = properties; this.tasks = tasks; this.mapper = mapper;
     }
+
     @Override public List<AsrSentence> recognize(UUID taskId, Path wavFile) {
         var ai = properties.ai();
         if (ai.apiKey() == null || ai.apiKey().isBlank()) throw new PermanentTaskException(
@@ -33,41 +36,53 @@ public class BailianAsrClient implements AsrClient {
             tasks.incrementApiAttempt(taskId);
             var recognizer = new Recognition();
             try {
-                var results = new ArrayList<AsrSentence>();
-                var callbackError = new AtomicReference<Exception>();
-                var callback = new ResultCallback<RecognitionResult>() {
-                    @Override public void onEvent(RecognitionResult result) {
-                        if (result.isSentenceEnd() && result.getSentence() != null
-                                && result.getSentence().getText() != null && !result.getSentence().getText().isBlank()) {
-                            results.add(new AsrSentence(result.getSentence().getBeginTime(),
-                                    result.getSentence().getEndTime(), result.getSentence().getText().strip()));
-                        }
-                    }
-                    @Override public void onComplete() {}
-                    @Override public void onError(Exception exception) { callbackError.set(exception); }
-                };
                 var param = RecognitionParam.builder().apiKey(ai.apiKey()).model(ai.asrModel())
-                        .format("wav").sampleRate(16000).parameter("language_hints", new String[]{"zh", "en"}).build();
-                recognizer.call(param, callback);
-                try (var input = Files.newInputStream(wavFile)) {
-                    var buffer = new byte[3200]; int count;
-                    while ((count = input.read(buffer)) >= 0) {
-                        if (count > 0) recognizer.sendAudioFrame(ByteBuffer.wrap(buffer, 0, count));
-                        Thread.sleep(95);
-                    }
-                }
-                recognizer.stop();
-                if (callbackError.get() != null) throw callbackError.get();
-                return List.copyOf(results);
-            } catch (InterruptedException exception) {
-                Thread.currentThread().interrupt();
-                throw new RetryableTaskException("ASR_INTERRUPTED", "ASR 调用被中断");
+                        .format("wav").sampleRate(16000)
+                        .parameter("language_hints", new String[]{"zh", "en"})
+                        .parameter("semantic_punctuation_enabled", true)
+                        .build();
+                // SDK 的本地文件非流式接口会一次提交完整文件并汇总句级时间戳。
+                // 不再由应用按 100 ms 节奏实时推流，也不再按一分钟拆分 ASR 会话。
+                var raw = recognizer.call(param, wavFile.toFile());
+                var sentences = parseSentences(raw);
+                if (sentences.isEmpty()) throw new IllegalStateException("ASR result contains no completed sentence");
+                log.info("ASR local-file call completed taskId={} model={} sentenceCount={} firstPackageDelayMs={} lastPackageDelayMs={}",
+                        taskId, ai.asrModel(), sentences.size(), recognizer.getFirstPackageDelay(), recognizer.getLastPackageDelay());
+                return sentences;
             } catch (Exception exception) {
-                last = new RetryableTaskException("ASR_TEMPORARY_FAILURE", "ASR 调用失败");
+                log.warn("ASR local-file call failed taskId={} model={} attempt={}/{}",
+                        taskId, ai.asrModel(), attempt, ai.maxAttempts(), exception);
+                last = new RetryableTaskException("ASR_TEMPORARY_FAILURE", "录音文件转写暂时失败");
             } finally {
                 try { recognizer.getDuplexApi().close(1000, "bye"); } catch (Exception ignored) {}
             }
         }
-        throw last == null ? new RetryableTaskException("ASR_TEMPORARY_FAILURE", "ASR 调用失败") : last;
+        throw last == null ? new RetryableTaskException("ASR_TEMPORARY_FAILURE", "录音文件转写暂时失败") : last;
+    }
+
+    List<AsrSentence> parseSentences(String raw) {
+        try {
+            var root = mapper.readTree(raw);
+            var values = root.path("sentences");
+            if (!values.isArray()) throw new IllegalArgumentException("sentences missing");
+            var result = new ArrayList<AsrSentence>();
+            for (JsonNode value : values) {
+                var text = value.path("text").asText("").strip();
+                if (text.isBlank()) continue;
+                long begin = longValue(value, "begin_time", "beginTime");
+                long end = longValue(value, "end_time", "endTime");
+                if (begin < 0 || end < begin) continue;
+                result.add(new AsrSentence(begin, end, text));
+            }
+            return List.copyOf(result);
+        } catch (Exception exception) {
+            throw new IllegalArgumentException("ASR result JSON is invalid", exception);
+        }
+    }
+
+    private long longValue(JsonNode node, String snakeCase, String camelCase) {
+        var value = node.get(snakeCase);
+        if (value == null || !value.canConvertToLong()) value = node.get(camelCase);
+        return value != null && value.canConvertToLong() ? value.asLong() : -1;
     }
 }

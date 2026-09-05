@@ -11,13 +11,13 @@ class MockExamRequestNormalizerTest {
             new MockExamProperties(3, Duration.ofMinutes(4), 50, 1000, 300, 2000, 10,
                     .82, "v1", 8));
 
-    @Test void supportsAllSevenTypesAndComputesCustomScore() {
+    @Test void supportsAllEightTypesAndComputesCustomScore() {
         var counts = new EnumMap<MockExamQuestionType, Integer>(MockExamQuestionType.class);
         var scores = new EnumMap<MockExamQuestionType, Integer>(MockExamQuestionType.class);
         Arrays.stream(MockExamQuestionType.values()).forEach(type -> { counts.put(type, 1); scores.put(type, 5); });
         var value = normalizer.normalize(new MockExamRequestNormalizer.Request("期末", MockExamScope.WHOLE_COURSE,
-                List.of(), counts, ScoreMode.CUSTOM, scores, 35, 90, false, "中文作答"), List.of());
-        assertThat(value.questionCount()).isEqualTo(7); assertThat(value.scoreSum()).isEqualTo(35);
+                List.of(), counts, ScoreMode.CUSTOM, scores, 40, 90, false, "中文作答"), List.of());
+        assertThat(value.questionCount()).isEqualTo(8); assertThat(value.scoreSum()).isEqualTo(40);
         assertThat(value.questionCounts()).containsOnlyKeys(MockExamQuestionType.values());
     }
 

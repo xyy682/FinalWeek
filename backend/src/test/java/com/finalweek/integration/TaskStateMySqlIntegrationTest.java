@@ -35,7 +35,9 @@ class TaskStateMySqlIntegrationTest {
         seed(userId, courseId, materialId, taskId);
         var executor = Executors.newFixedThreadPool(2);
         try {
-            Callable<Integer> claim = () -> update("update background_task set status='PROCESSING', delivery_attempt_count=delivery_attempt_count+1 " +
+            Callable<Integer> claim = () -> update("update background_task set status='PROCESSING', " +
+                    "delivery_attempt_count=delivery_attempt_count+1, processing_owner='consumer-a', " +
+                    "processing_lease_until=date_add(current_timestamp(6), interval 5 minute) " +
                     "where id=? and execution_round=0 and delivery_attempt_count < 3 and status in " +
                     "('PENDING_PUBLISH','PUBLISH_FAILED','QUEUED','RETRYING')", taskId);
             var first = executor.submit(claim); var second = executor.submit(claim);
@@ -44,6 +46,18 @@ class TaskStateMySqlIntegrationTest {
 
         assertThat(update("update background_task set status='CANCELLED' where id=? and status='QUEUED'", taskId)).isZero();
         assertThat(queryInt("select delivery_attempt_count from background_task where id=?", taskId)).isOne();
+        assertThat(queryString("select processing_owner from background_task where id=?", taskId))
+                .isEqualTo("consumer-a");
+
+        assertThat(update("update background_task set processing_lease_until=date_sub(current_timestamp(6), interval 1 second) " +
+                "where id=?", taskId)).isOne();
+        var recovery = "update background_task set status='PENDING_PUBLISH', processing_owner=null, " +
+                "processing_lease_until=null where id=? and execution_round=0 and status='PROCESSING' " +
+                "and processing_owner='consumer-a' and processing_lease_until <= current_timestamp(6)";
+        assertThat(update(recovery, taskId)).isOne();
+        assertThat(update(recovery, taskId)).isZero();
+        assertThat(queryString("select status from background_task where id=?", taskId))
+                .isEqualTo("PENDING_PUBLISH");
 
         insertCheckpoint(taskId, UUID.randomUUID());
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> insertCheckpoint(taskId, UUID.randomUUID()))
@@ -59,7 +73,10 @@ class TaskStateMySqlIntegrationTest {
                 "and table_name='mock_exam' and column_name in " +
                 "('knowledge_version_id','quality_policy_version','history_similarity_threshold','error_message'," +
                 "'pdf_template_version','formula_policy_version','paper_object_key','answer_object_key')")).isEqualTo(8);
-        assertThat(queryScalar("select count(*) from flyway_schema_history where success=true")).isEqualTo(14);
+        assertThat(queryScalar("select count(*) from information_schema.columns where table_schema=database() " +
+                "and table_name='background_task' and column_name in ('processing_owner','processing_lease_until')"))
+                .isEqualTo(2);
+        assertThat(queryScalar("select count(*) from flyway_schema_history where success=true")).isEqualTo(15);
     }
 
     private static void seed(UUID userId, UUID courseId, UUID materialId, UUID taskId) throws Exception {
@@ -97,6 +114,12 @@ class TaskStateMySqlIntegrationTest {
         sql.setBytes(1, bytes(id)); return sql.executeUpdate(); } }
     private static int queryInt(String statement, UUID id) throws Exception { try (var connection = connection(); var sql = connection.prepareStatement(statement)) {
         sql.setBytes(1, bytes(id)); try (var result = sql.executeQuery()) { result.next(); return result.getInt(1); } } }
+    private static String queryString(String statement, UUID id) throws Exception {
+        try (var connection = connection(); var sql = connection.prepareStatement(statement)) {
+            sql.setBytes(1, bytes(id));
+            try (var result = sql.executeQuery()) { result.next(); return result.getString(1); }
+        }
+    }
     private static int queryScalar(String statement) throws Exception { try (var connection = connection(); var sql = connection.prepareStatement(statement);
             var result = sql.executeQuery()) { result.next(); return result.getInt(1); } }
     private static Connection connection() throws SQLException { return DriverManager.getConnection(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword()); }

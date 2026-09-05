@@ -322,11 +322,11 @@ public final class GoldenEvalRunner {
         JsonNode answer = question.path("answer");
         JsonNode options = question.path("options");
         return switch (question.path("questionType").asText()) {
-            case "SINGLE_CHOICE" -> options.size() >= 2 && validOptionIndexes(answer.path("correctOptionIndexes"), options.size(), 1);
-            case "MULTIPLE_CHOICE" -> options.size() >= 2 && validOptionIndexes(answer.path("correctOptionIndexes"), options.size(), 2);
+            case "SINGLE_CHOICE" -> options.size() == 4 && validOptionIndexes(answer.path("correctOptionIndexes"), options.size(), 1);
+            case "MULTIPLE_CHOICE" -> options.size() == 4 && validOptionIndexes(answer.path("correctOptionIndexes"), options.size(), 2);
             case "TRUE_FALSE" -> answer.path("trueFalseAnswer").isBoolean();
             case "FILL_BLANK" -> nonEmptyArray(answer.path("blanks"));
-            case "SHORT_ANSWER", "ESSAY" -> nonBlankText(answer.path("referenceAnswer"));
+            case "SHORT_ANSWER", "ESSAY", "COMPREHENSIVE" -> nonBlankText(answer.path("referenceAnswer"));
             case "CALCULATION" -> nonEmptyArray(answer.path("steps")) && nonBlankText(answer.path("finalAnswer"));
             default -> false;
         };
@@ -378,12 +378,12 @@ public final class GoldenEvalRunner {
         String system = outline
                 ? "你是课程提纲评测助手。仅按上下文输出 JSON，来源只能使用给定 segmentId。提纲最多四层；真题、教师强调和学生重点应提高 importance。"
                 : mockExam
-                ? "你是模拟卷评测助手。严格按请求输出 JSON；课程题只能引用给定 segmentId，不复制或轻微改写上下文原题。资料不足且不允许通用知识时返回 INSUFFICIENT_MATERIAL，不得减少题量；允许通用知识时，只有上下文确有缺口的题可使用通用知识，并必须设置 usesGeneralKnowledge=true、sourceSegmentIds=[]，不得伪造成课程来源。公式只放 formulas.expression，不输出 TeX 模板或危险命令。"
+                ? "你是模拟卷评测助手。严格按请求输出 JSON；课程题只能引用给定 segmentId，不复制或轻微改写上下文原题。资料不足且不允许通用知识时返回 INSUFFICIENT_MATERIAL，不得减少题量；允许通用知识时，只有上下文确有缺口的题可使用通用知识，并必须设置 usesGeneralKnowledge=true、sourceSegmentIds=[]，不得伪造成课程来源。单选和多选必须且只能有四个选项，其他题型 options 必须为空；综合题包含案例或材料、多个关联小问及分点参考答案。公式只放 formulas.expression，不输出 TeX 模板或危险命令。"
                 : "你是课程问答评测助手。仅按上下文输出 JSON。无相关证据时必须明确说资料不足并返回空来源；不得用未标记常识补答案。";
         String user = outline
                 ? "输出 {\"nodes\":[{\"title\":\"知识点\",\"importance\":\"HIGH|MEDIUM|LOW\",\"sourceSegmentIds\":[\"UUID\"],\"children\":[]}]}。上下文：\n" + context
                 : mockExam
-                ? "请求：" + definition.path("request") + "。成功时输出 {\"status\":\"GENERATED\",\"questions\":[{\"questionType\":\"SINGLE_CHOICE|MULTIPLE_CHOICE|TRUE_FALSE|FILL_BLANK|SHORT_ANSWER|CALCULATION|ESSAY\",\"stem\":\"题干\",\"options\":[],\"answer\":{\"correctOptionIndexes\":null,\"trueFalseAnswer\":null,\"blanks\":null,\"referenceAnswer\":null,\"steps\":null,\"finalAnswer\":null},\"score\":1,\"usesGeneralKnowledge\":false,\"sourceSegmentIds\":[\"UUID\"],\"formulas\":[]}]}；严格资料不足时输出 {\"status\":\"INSUFFICIENT_MATERIAL\",\"missingKnowledgePoints\":[\"缺口\"],\"questions\":[]}。上下文：\n" + context
+                ? "请求：" + definition.path("request") + "。成功时输出 {\"status\":\"GENERATED\",\"questions\":[{\"questionType\":\"SINGLE_CHOICE|MULTIPLE_CHOICE|TRUE_FALSE|FILL_BLANK|SHORT_ANSWER|CALCULATION|ESSAY|COMPREHENSIVE\",\"stem\":\"题干\",\"options\":[],\"answer\":{\"correctOptionIndexes\":null,\"trueFalseAnswer\":null,\"blanks\":null,\"referenceAnswer\":null,\"steps\":null,\"finalAnswer\":null},\"score\":1,\"usesGeneralKnowledge\":false,\"sourceSegmentIds\":[\"UUID\"],\"formulas\":[]}]}；严格资料不足时输出 {\"status\":\"INSUFFICIENT_MATERIAL\",\"missingKnowledgePoints\":[\"缺口\"],\"questions\":[]}。上下文：\n" + context
                 : "输出 {\"answer\":\"回答\",\"sourceSegmentIds\":[\"UUID\"],\"generalKnowledgeSupplement\":null}。问题："
                     + definition.path("question").asText() + "\n上下文：\n" + context;
         var body = JSON.createObjectNode(); body.put("model", model); body.put("enable_thinking", false);

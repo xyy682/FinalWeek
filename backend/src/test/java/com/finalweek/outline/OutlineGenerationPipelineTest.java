@@ -49,6 +49,8 @@ class OutlineGenerationPipelineTest {
     private Fixture fixture() {
         var retrieval = mock(HybridRetrievalService.class);
         var materials = mock(MaterialRepository.class);
+        var segments = mock(com.finalweek.material.CourseSegmentRepository.class);
+        when(segments.findAllByMaterial_IdOrderByChunkNo(any())).thenReturn(List.of());
         var checkpoints = mock(OutlineCheckpointService.class);
         var validator = new OutlineGenerationValidator(new ObjectMapper());
         var publisher = mock(OutlinePublisher.class);
@@ -68,7 +70,7 @@ class OutlineGenerationPipelineTest {
         when(checkpoints.context(null)).thenReturn(context);
         when(retrieval.retrieve(eq(userId), eq(courseId), anyString(), anySet())).thenReturn(new HybridRetrievalResult(
                 List.of(new RetrievalHit(segment, 1, 1, 1)), false, false));
-        var pipeline = new OutlineGenerationPipeline(retrieval, materials, checkpoints, validator,
+        var pipeline = new OutlineGenerationPipeline(retrieval, materials, segments, checkpoints, validator,
                 publisher, llm, new ObjectMapper(), knowledgeVersions);
         var valid = """
                 {"nodes":[{"title":"Newton second law","importance":"HIGH","sourceSegmentIds":["%s"],"children":[]}]}

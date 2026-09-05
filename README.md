@@ -7,19 +7,19 @@ FinalWeek 是面向大学生期末复习的课程资料理解工具。项目按 
 - Vue 3.5 + Vite 8 + TypeScript 6 + Element Plus 前端，包含邮箱登录、课程列表、资料/知识提纲/复习计划/课程问答/模拟卷五区独立 URL、全局活动任务抽屉、设置页和手机基础布局。
 - Java 21 + Spring Boot 3.5 单体，业务持久化采用 MyBatis-Plus、标量外键和显式 Mapper SQL；已实现 Mailpit 邮箱验证码、Redis TTL/限流、Spring Session、CSRF、课程 CRUD/逻辑删除、8 门上限和 ownership 隔离。
 - Redis 故障门禁覆盖登录、全部认证接口和未来 AI API 路径，统一返回 `503 SERVICE_REDIS_UNAVAILABLE`；静态落地页及公开 ping 仍可访问。
-- 分片上传使用 Redis 元数据/完成分片集合/完成标记、MinIO 确定性临时对象、Redisson complete 锁和 MySQL 唯一约束；支持断点差集续传、完整 SHA-256、格式/大小校验、同课程去重与过期临时分片清理。
+- 前端支持同一资料类型下最多 50 份文件批量选择、3 文件并发和逐文件失败重试；分片上传使用 Redis 元数据/完成分片集合/完成标记、MinIO 确定性临时对象、Redisson complete 锁和 MySQL 唯一约束；支持断点差集续传、完整 SHA-256、格式/大小校验、同课程去重与过期临时分片清理。
 - 上传完成会在同一数据库事务创建资料与 `PENDING_PUBLISH` 解析任务；RabbitMQ 使用 durable 队列、publisher confirm、manual ack、每轮三次投递预算和 DLQ，Redis/SSE 推送进度，MySQL REST 状态负责断线恢复。
 - PDF 使用 PDFBox 按页提取并对低文字密度页 OCR；PPTX 使用 POI 按幻灯片提取、LibreOffice 生成确定性 PDF 预览，必要时逐页 OCR；TXT/MD 保留段落号。
-- MP3/MP4 使用 FFmpeg/ffprobe 校验时长和切分音轨，`paraformer-realtime-v2` 以本地 WAV 字节流识别并保存句级时间戳；MP4 按场景和最长间隔抽帧、感知哈希去重、OCR，并按时间线合并 ASR/OCR。单路失败时保留另一条有效内容并记录警告。
+- MP3/MP4 使用 FFmpeg/ffprobe 校验时长并生成整份单声道 WAV，`paraformer-realtime-v2` 通过 SDK 本地文件非流式调用识别并保存句级时间戳；MP4 按场景和最长间隔抽帧、感知哈希去重、OCR，并按时间线合并 ASR/OCR。单路失败时保留另一条有效内容并记录警告。
 - `CourseSegment` 保存页码、幻灯片号、段落号或起止毫秒；语义优先的固定 token 上限分块保留来源位置，并以 `(material, chunk)` 生成稳定 UUID。任务依次持久化 `UPLOADED → CONTENT_EXTRACTED → CHUNKED → EMBEDDING_COMPLETED → COMPLETED` checkpoint，完整建索引后才原子标记资料成功。
 - 百炼 `text-embedding-v4` 批量向量化后按稳定 segment UUID upsert Qdrant，并携带用户、课程、资料和 segment 隔离字段；Lucene 10 为每门课程维护 BM25 增量索引，同课程写入由本地锁和 Redisson 锁串行化，启动时可按 MySQL 成功资料核对并重建。
 - 混合检索分别执行向量召回与 BM25，使用可配置 RRF（默认 `K=60`）融合、去重并回到 MySQL 解析原文；只返回 `SUCCEEDED` 资料，单路故障自动降级、双路故障明确返回不可用。
 - “资料已上传完毕”会在课程锁内把当时全部成功资料固化为不可变知识版本；资料集合哈希阻止重复确认，失败/取消资料必须明确忽略。新版自动创建提纲任务，发布成功前旧知识版本与旧提纲保持可用，旧版本内部保留。
-- 原 `parse_task` 数据经 Flyway 迁移为通用 `background_task`，统一承载资料、提纲、计划、模拟卷和隐藏答疑任务。任务类型约束各自 checkpoint，保留 publisher confirm、manual ack、旧执行轮次、CAS 取消竞争与 REST/SSE 恢复；全局抽屉只显示对用户可见的活动任务。
+- 原 `parse_task` 数据经 Flyway 迁移为通用 `background_task`，统一承载资料、提纲、计划、模拟卷和隐藏答疑任务。任务类型约束各自 checkpoint，保留 publisher confirm、manual ack、旧执行轮次、CAS 执行租约、心跳续租、超时回收、取消竞争与 REST/SSE 恢复；全局抽屉只显示对用户可见的活动任务。
 - 知识大纲以独立 RabbitMQ 任务执行，使用固定知识版本上下文和百炼 JSON 模式生成最多四层、100 节点的树；JSON Schema/Java 双重约束、一次格式修复、来源归属校验和版本 CAS 保证失败或旧任务不会覆盖当前大纲。人工重要度只修改当前版本，不跨版本继承。
 - 复习计划使用考试日期、每日分钟数、整体掌握程度和目标成绩异步生成按日期排列的知识点任务；服务端校验节点、单日与总时间预算，支持完成和撤销完成。请求幂等、知识版本快照和当前计划版本 CAS 保证旧任务不能覆盖新计划，生成失败保留旧计划。
 - 每门课程维护一条可游标翻页的连续文字问答历史。问题与隐藏后台任务在同一事务落库，答疑立即检索当前全部成功资料并允许离页；回答正文、课程来源与可选通用知识补充结构化分离。失败重试复用原消息 ID，不进入全局任务抽屉。
-- 模拟卷固定提交时的知识版本和可选提纲子树，支持单选、多选、判断、填空、简答、计算、论述七类题型、自动/自定义整数分值、可选总分/时长、严格资料模式和必要通用知识补题。Java 校验题量、答案、来源、公式及原题复刻，历史记录保留失败/取消与关联重试。
+- 模拟卷固定提交时的知识版本和可选提纲子树，支持单选、多选、判断、填空、简答、计算、论述、综合八类题型、自动/自定义整数分值、可选总分/时长、严格资料模式和必要通用知识补题。Java 校验题量、答案、来源、公式及原题复刻，历史记录保留失败/取消与关联重试。
 - 试卷和参考答案从同一份已校验 DTO 渲染。后端 Jammy 镜像内以非特权用户运行 XeLaTeX、Noto CJK、固定模板和 `-no-shell-escape`，执行 TeX 转义、公式白名单、超时/大小/PDFBox 校验；两份 PDF 均上传并复核后才原子发布，MinIO 对象删除使用可重试清理记录。
 - PDF/PPTX 预览统一为短时授权 PDF URL；TXT/MD/MP3/MP4 使用原文件短时 URL，MinIO 支持浏览器 Range 请求。来源片段接口同时校验用户、课程和资料归属。
 - 单个 Compose 项目启动前端、后端、MySQL、Redis、RabbitMQ、MinIO、Qdrant 和 Mailpit；Web API 与 MQ consumer 保持同一后端进程。
@@ -111,9 +111,9 @@ corepack pnpm@10.18.3 test
 corepack pnpm@10.18.3 build
 ```
 
-2026-08-21 MyBatis-Plus 重构后的宿主机完整后端构建执行 105 项 JUnit，0 failures、0 errors、1 skipped；MySQL 8.4.10 Testcontainers、知识版本双线程确认竞争、同课程出卷冲突和模拟卷清理记录再排队均通过，唯一跳过项是当前环境未设置 `XELATEX_EXECUTABLE` 的真实模板测试。历史启用 `D:\texlive\2026\bin\windows\xelatex.exe` 时该中文/公式模板测试已通过。Docker 镜像构建同样执行 105 项，其中依赖宿主机 Docker/XeLaTeX 的 7 项按环境条件跳过。前端执行 5 项 Vitest，并完成类型检查和生产构建。Playwright 在 Desktop Chromium、系统 Edge 和 Pixel 7 三个项目上共发现 9 项：5 passed、4 个按项目设计 skipped、0 failed；最终重新运行的真实 AI 主链路在 Chromium 于 53.9 秒内完成。
+最新记录的 2026-08-24 宿主机完整后端回归执行 115 项 JUnit，0 failures、0 errors、1 skipped；新增综合题、分题型生成和失败题型局部重试覆盖。2026-08-21 的 105 项 MyBatis-Plus 重构基线、Docker 镜像构建、MySQL Testcontainers、真实 XeLaTeX、前端 Vitest/构建和 Playwright 结果作为历史环境证据保留在 [`docs/TEST_REPORT.md`](docs/TEST_REPORT.md)，不同日期与运行环境的测试数量不合并统计。
 
-自动化测试在原有上传、解析、检索和权限覆盖基础上，增加知识版本集合幂等/失败资料忽略/版本化提纲、通用任务可见性与取消竞争、异步计划/答疑恢复、七类题型与整数溢出边界、严格资料/通用知识、来源与相似度策略、TeX 转义/公式白名单、双 PDF 原子发布、逻辑删除/对象清理和课程级清理。详见 [`docs/TEST_REPORT.md`](docs/TEST_REPORT.md)。
+自动化测试在原有上传、解析、检索和权限覆盖基础上，增加知识版本集合幂等/失败资料忽略/版本化提纲、通用任务可见性与取消竞争、异步计划/答疑恢复、八类题型与整数溢出边界、严格资料/通用知识、来源与相似度策略、TeX 转义/公式白名单、双 PDF 原子发布、逻辑删除/对象清理和课程级清理。综合题已纳入自动化测试，但尚未重新运行付费 Golden Eval；历史 14 条真实报告只代表原七类题型。详见 [`docs/TEST_REPORT.md`](docs/TEST_REPORT.md)。
 
 Phase 5 真实验证使用五种格式逐一走完登录、建课、分片上传、RabbitMQ 消费和来源读取：PDF/PPTX/TXT 生成正确页/幻灯片/段落位置，MP3 生成句级时间戳，MP4 以一次 ASR 和一次 OCR 合并音轨与画面文字；五种预览均验证 Range `206`，来源接口验证所属用户 `200`、其他用户 `404`、匿名 `401`。
 

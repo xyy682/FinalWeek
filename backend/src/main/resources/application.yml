@@ -22,6 +22,8 @@ spring:
       simple:
         acknowledge-mode: manual
         prefetch: 1
+        concurrency: ${TASK_CONSUMER_CONCURRENCY:2}
+        max-concurrency: ${TASK_CONSUMER_MAX_CONCURRENCY:4}
   mail:
     host: ${MAIL_HOST:localhost}
     port: ${MAIL_PORT:1025}
@@ -69,6 +71,8 @@ finalweek:
     confirm-timeout: ${TASK_CONFIRM_TIMEOUT_SECONDS:5}s
     stale-pending-threshold: ${TASK_STALE_PENDING_SECONDS:30}s
     stale-scan-interval: ${TASK_STALE_SCAN_SECONDS:30}s
+    processing-lease: ${TASK_PROCESSING_LEASE_SECONDS:300}s
+    lease-heartbeat-interval: ${TASK_LEASE_HEARTBEAT_SECONDS:30}s
     progress-ttl: ${TASK_PROGRESS_TTL_HOURS:24}h
     max-delivery-attempts: ${TASK_MAX_DELIVERY_ATTEMPTS:3}
   storage:
@@ -93,8 +97,8 @@ finalweek:
     document-max-size-mb: ${DOCUMENT_MAX_SIZE_MB:100}
     media-max-size-mb: ${MEDIA_MAX_SIZE_MB:2048}
     media-max-duration: ${MEDIA_MAX_DURATION_MINUTES:120}m
-    parse-user-rate-per-minute: ${PARSE_USER_RATE_PER_MINUTE:5}
-    parse-global-rate-per-minute: ${PARSE_GLOBAL_RATE_PER_MINUTE:30}
+    parse-user-rate-per-minute: ${PARSE_USER_RATE_PER_MINUTE:30}
+    parse-global-rate-per-minute: ${PARSE_GLOBAL_RATE_PER_MINUTE:120}
     plan-user-rate-per-minute: ${PLAN_USER_RATE_PER_MINUTE:5}
     chat-user-rate-per-minute: ${CHAT_USER_RATE_PER_MINUTE:20}
   retrieval:
@@ -139,7 +143,7 @@ finalweek:
       max-file-size: ${MOCK_EXAM_PDF_MAX_SIZE_MB:20}MB
       max-log-size: ${XELATEX_MAX_LOG_SIZE_KB:512}KB
       temp-directory: ${MOCK_EXAM_TEMP_DIRECTORY:./data/tmp/mock-exams}
-      template-version: ${MOCK_EXAM_TEMPLATE_VERSION:v1}
+      template-version: ${MOCK_EXAM_TEMPLATE_VERSION:v2}
       formula-policy-version: ${MOCK_EXAM_FORMULA_POLICY_VERSION:v1}
 
 mybatis-plus:

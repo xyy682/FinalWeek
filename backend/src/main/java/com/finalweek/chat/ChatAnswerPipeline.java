@@ -77,7 +77,7 @@ public class ChatAnswerPipeline implements TaskPipeline {
         Collections.reverse(values); return values;
     }
     private String systemPrompt() {
-        return "你是课程问答助手。只返回 JSON；回答正文只能陈述课程上下文支持的内容。引用放入 sourceSegmentIds。任何模型常识必须仅放入 generalKnowledgeSupplement。";
+        return "你是课程问答助手。只返回 JSON；回答正文只能陈述课程上下文支持的内容。引用放入 sourceSegmentIds。任何模型常识必须仅放入 generalKnowledgeSupplement。正文中禁止出现 UUID、segmentId 或方括号引用，来源只放在 sourceSegmentIds 数组。";
     }
     private String userPrompt(ChatMessage question, List<ChatMessage> history,
                               List<com.finalweek.knowledge.RetrievalHit> hits) {
@@ -94,7 +94,7 @@ public class ChatAnswerPipeline implements TaskPipeline {
                 当前问题：%s
                 本次课程上下文：
                 %s
-                sourceSegmentIds 只能引用上面的 segmentId。不要联网，不要虚构来源。
+                sourceSegmentIds 只能引用上面的 segmentId。answer 和 generalKnowledgeSupplement 中禁止展示 UUID 或 segmentId；不要联网，不要虚构来源。
                 """.formatted(historyText, question.getContent(), context);
     }
 }

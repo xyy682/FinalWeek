@@ -10,13 +10,21 @@ import { retryTask } from '@/api/tasks'
 
 const props = defineProps<{ courseId: string }>()
 const materials = ref<Material[]>([])
-const selectedFile = ref<File | null>(null)
+type UploadItemStatus = 'READY' | 'UPLOADING' | 'COMPLETED' | 'FAILED'
+interface UploadItem {
+  key: string
+  file: File
+  status: UploadItemStatus
+  session: UploadSession | null
+  uploadedCount: number
+  error: string
+  duplicate: boolean
+}
+
+const uploadItems = ref<UploadItem[]>([])
 const materialType = ref<MaterialType>('COURSEWARE')
 const focusNotes = ref('')
-const uploadSession = ref<UploadSession | null>(null)
-const uploadedCount = ref(0)
 const uploading = ref(false)
-const uploadError = ref('')
 const fileInput = ref<HTMLInputElement | null>(null)
 const dragging = ref(false)
 const progressConnection = ref<'connected' | 'reconnecting'>('reconnecting')
@@ -35,10 +43,16 @@ const statusLabels: Record<MaterialStatus, string> = {
   RETRYING: '重试中', SUCCEEDED: '解析成功', FAILED: '解析失败', CANCELLED: '已取消',
 }
 const deletable = new Set<MaterialStatus>(['PENDING_PUBLISH', 'PUBLISH_FAILED', 'FAILED', 'CANCELLED'])
-const uploadPercent = computed(() => uploadSession.value
-  ? Math.round(uploadedCount.value / uploadSession.value.totalChunks * 100) : 0)
+const activeUploadCount = computed(() => uploadItems.value.filter(item => item.status === 'UPLOADING').length)
+const failedUploadCount = computed(() => uploadItems.value.filter(item => item.status === 'FAILED').length)
+const completedUploadCount = computed(() => uploadItems.value.filter(item => item.status === 'COMPLETED').length)
+const batchPercent = computed(() => {
+  if (!uploadItems.value.length) return 0
+  const total = uploadItems.value.reduce((sum, item) => sum + itemPercent(item), 0)
+  return Math.round(total / uploadItems.value.length)
+})
 const unfinishedCount = computed(() => materials.value.filter(item =>
-  ['PENDING_PUBLISH', 'QUEUED', 'PROCESSING', 'RETRYING'].includes(item.status)).length + (uploading.value ? 1 : 0))
+  ['PENDING_PUBLISH', 'QUEUED', 'PROCESSING', 'RETRYING'].includes(item.status)).length + activeUploadCount.value)
 const successfulCount = computed(() => materials.value.filter(item => item.status === 'SUCCEEDED').length)
 const ignoredMaterials = computed(() => materials.value.filter(item =>
   ['PUBLISH_FAILED', 'FAILED', 'CANCELLED'].includes(item.status)).map(item => item.originalFilename))
@@ -54,14 +68,32 @@ function formatSize(bytes: number) {
 function describe(error: unknown) {
   return error instanceof ApiError ? `${error.body.message}（${error.body.code} · ${error.body.requestId}）` : '上传失败，请检查网络后继续'
 }
-function chooseFile(file?: File) {
-  if (!file) return
-  selectedFile.value = file
-  uploadSession.value = null
-  uploadedCount.value = 0
-  uploadError.value = ''
+function itemPercent(item: UploadItem) {
+  if (item.status === 'COMPLETED') return 100
+  if (!item.session?.totalChunks) return 0
+  return Math.round(item.uploadedCount / item.session.totalChunks * 100)
 }
-function drop(event: DragEvent) { dragging.value = false; chooseFile(event.dataTransfer?.files[0]) }
+function chooseFiles(files?: FileList | File[]) {
+  if (!files?.length) return
+  const selected = Array.from(files)
+  if (selected.length > 50) ElMessage.warning('单批最多选择 50 个文件，已保留前 50 个')
+  const existing = new Set(uploadItems.value.map(item => item.key))
+  for (const file of selected.slice(0, 50)) {
+    const key = fingerprint(file)
+    if (!existing.has(key)) {
+      uploadItems.value.push({ key, file, status: 'READY', session: null, uploadedCount: 0, error: '', duplicate: false })
+      existing.add(key)
+    }
+  }
+  if (fileInput.value) fileInput.value.value = ''
+}
+function drop(event: DragEvent) { dragging.value = false; chooseFiles(event.dataTransfer?.files) }
+function removeUploadItem(item: UploadItem) {
+  if (item.status !== 'UPLOADING') uploadItems.value = uploadItems.value.filter(value => value.key !== item.key)
+}
+function clearFinishedUploads() {
+  uploadItems.value = uploadItems.value.filter(item => !['COMPLETED'].includes(item.status))
+}
 
 async function loadMaterials() {
   try {
@@ -96,19 +128,19 @@ async function retryOutline() {
   } catch (error) { ElMessage.error(describe(error)) }
 }
 
-async function resolveSession(file: File): Promise<{ session: UploadSession; uploaded: Set<number> } | null> {
+async function resolveSession(item: UploadItem): Promise<{ session: UploadSession; uploaded: Set<number> } | null> {
+  const file = item.file
   const savedId = localStorage.getItem(fingerprint(file))
   if (savedId) {
     try {
       const status = await getUploadStatus(savedId)
       if (status.status === 'COMPLETED') {
         localStorage.removeItem(fingerprint(file)); localStorage.removeItem(`${fingerprint(file)}:meta`)
-        await loadMaterials(); selectedFile.value = null; ElMessage.success('该文件已完成上传')
+        item.status = 'COMPLETED'; item.uploadedCount = item.session?.totalChunks ?? 1
         return null
-      } else {
-        const initialized = JSON.parse(localStorage.getItem(`${fingerprint(file)}:meta`) ?? 'null') as UploadSession | null
-        if (initialized) return { session: initialized, uploaded: new Set(status.uploadedChunks) }
       }
+      const initialized = JSON.parse(localStorage.getItem(`${fingerprint(file)}:meta`) ?? 'null') as UploadSession | null
+      if (initialized) return { session: initialized, uploaded: new Set(status.uploadedChunks) }
     } catch (error) {
       if (!(error instanceof ApiError) || ![404, 410].includes(error.status)) throw error
       localStorage.removeItem(fingerprint(file)); localStorage.removeItem(`${fingerprint(file)}:meta`)
@@ -120,37 +152,45 @@ async function resolveSession(file: File): Promise<{ session: UploadSession; upl
   return { session, uploaded: new Set<number>() }
 }
 
-async function startUpload() {
-  const file = selectedFile.value
-  if (!file) return
-  uploading.value = true; uploadError.value = ''
+async function uploadOne(item: UploadItem) {
+  item.status = 'UPLOADING'; item.error = ''
   try {
-    const resolved = await resolveSession(file)
+    const resolved = await resolveSession(item)
     if (!resolved) return
-    uploadSession.value = resolved.session
-    uploadedCount.value = resolved.uploaded.size
+    item.session = resolved.session; item.uploadedCount = resolved.uploaded.size
     const missing = missingChunkIndexes(resolved.session.totalChunks, resolved.uploaded)
+    for (const index of missing) {
+      const start = index * resolved.session.chunkSize
+      await putChunk(resolved.session.uploadId, index,
+        item.file.slice(start, Math.min(item.file.size, start + resolved.session.chunkSize)))
+      item.uploadedCount++
+    }
+    const result = await completeUpload(resolved.session.uploadId)
+    localStorage.removeItem(fingerprint(item.file)); localStorage.removeItem(`${fingerprint(item.file)}:meta`)
+    item.duplicate = result.duplicate; item.status = 'COMPLETED'
+  } catch (error) {
+    item.status = 'FAILED'; item.error = describe(error)
+  }
+}
+
+async function startUpload(retryOnly = false) {
+  if (uploading.value) return
+  const targets = uploadItems.value.filter(item => retryOnly ? item.status === 'FAILED' : ['READY', 'FAILED'].includes(item.status))
+  if (!targets.length) return
+  uploading.value = true
+  try {
     let cursor = 0
     const worker = async () => {
-      while (cursor < missing.length) {
-        const index = missing[cursor]
-        cursor++
-        if (index === undefined) return
-        const start = index * resolved.session.chunkSize
-        await putChunk(resolved.session.uploadId, index, file.slice(start, Math.min(file.size, start + resolved.session.chunkSize)))
-        uploadedCount.value++
+      while (cursor < targets.length) {
+        const item = targets[cursor++]
+        if (item) await uploadOne(item)
       }
     }
-    const workerResults = await Promise.allSettled(Array.from({ length: Math.min(3, missing.length) }, worker))
-    const failedWorker = workerResults.find((result) => result.status === 'rejected')
-    if (failedWorker?.status === 'rejected') throw failedWorker.reason
-    const result = await completeUpload(resolved.session.uploadId)
-    localStorage.removeItem(fingerprint(file)); localStorage.removeItem(`${fingerprint(file)}:meta`)
-    ElMessage.success(result.duplicate ? '课程中已有相同内容，已返回原资料' : '上传完成，资料待投递解析')
-    selectedFile.value = null; uploadSession.value = null; uploadedCount.value = 0
+    await Promise.all(Array.from({ length: Math.min(3, targets.length) }, worker))
     await loadMaterials()
-  } catch (error) {
-    uploadError.value = describe(error)
+    const failed = targets.filter(item => item.status === 'FAILED').length
+    if (failed) ElMessage.warning(`${targets.length - failed} 个文件上传完成，${failed} 个失败，可仅重试失败项`)
+    else ElMessage.success(`本批 ${targets.length} 个文件已全部上传并进入解析队列`)
   } finally { uploading.value = false }
 }
 
@@ -198,20 +238,32 @@ onBeforeUnmount(() => progressEvents?.close())
 
 <template>
   <section class="upload-panel" aria-labelledby="upload-title">
-    <div><h2 id="upload-title">上传资料</h2><p>支持 PDF、PPTX、TXT/MD、MP3、MP4；中断后重新选择同一文件即可续传。</p></div>
+    <div><h2 id="upload-title">批量上传资料</h2><p>一次可选择多份文件，共用资料类型和重点说明；最多同时上传 3 个文件，失败项可以单独续传。</p></div>
     <div class="form-grid">
-      <label>资料类型 <el-select v-model="materialType"><el-option v-for="option in typeOptions" :key="option.value" :label="option.label" :value="option.value" /></el-select></label>
-      <label>重点说明（可选）<el-input v-model="focusNotes" maxlength="1000" show-word-limit placeholder="老师强调内容或考试范围" /></label>
+      <label>资料类型 <el-select v-model="materialType" :disabled="uploading"><el-option v-for="option in typeOptions" :key="option.value" :label="option.label" :value="option.value" /></el-select></label>
+      <label>重点说明（可选）<el-input v-model="focusNotes" maxlength="1000" show-word-limit :disabled="uploading" placeholder="本批资料共用，例如：老师强调内容或考试范围" /></label>
     </div>
-    <button class="drop-zone" :class="{ dragging }" type="button" @click="fileInput?.click()" @dragover.prevent="dragging = true" @dragleave="dragging = false" @drop.prevent="drop">
-      <strong>{{ selectedFile ? selectedFile.name : '拖拽文件到这里，或点击选择' }}</strong>
-      <span>{{ selectedFile ? formatSize(selectedFile.size) : '单个文档 ≤100MB；音视频 ≤2GB' }}</span>
+    <button class="drop-zone" :class="{ dragging }" type="button" :disabled="uploading" @click="fileInput?.click()" @dragover.prevent="dragging = true" @dragleave="dragging = false" @drop.prevent="drop">
+      <strong>拖拽多个文件到这里，或点击批量选择</strong>
+      <span>单个文档 ≤100MB；音视频 ≤2GB；单批最多 50 个</span>
     </button>
-    <input ref="fileInput" class="visually-hidden" type="file" accept=".pdf,.pptx,.txt,.md,.mp3,.mp4" @change="chooseFile(($event.target as HTMLInputElement).files?.[0])" />
-    <div v-if="selectedFile" class="upload-actions">
-      <div v-if="uploadSession" class="progress"><span>上传进度（{{ uploadedCount }}/{{ uploadSession.totalChunks }} 分片）</span><el-progress :percentage="uploadPercent" /></div>
-      <p v-if="uploadError" class="error" role="alert">{{ uploadError }}</p>
-      <el-button type="primary" :loading="uploading" @click="startUpload">{{ uploadError ? '继续上传' : '开始上传' }}</el-button>
+    <input ref="fileInput" class="visually-hidden" type="file" multiple accept=".pdf,.pptx,.txt,.md,.mp3,.mp4" @change="chooseFiles(($event.target as HTMLInputElement).files ?? undefined)" />
+    <div v-if="uploadItems.length" class="upload-actions">
+      <div class="batch-progress"><span>本批 {{ completedUploadCount }}/{{ uploadItems.length }} 个已完成</span><el-progress :percentage="batchPercent" /></div>
+      <div class="upload-queue">
+        <article v-for="item in uploadItems" :key="item.key" class="upload-item">
+          <div class="upload-file"><strong>{{ item.file.name }}</strong><span>{{ formatSize(item.file.size) }}</span></div>
+          <div class="upload-item-progress"><el-progress :percentage="itemPercent(item)" :status="item.status === 'FAILED' ? 'exception' : item.status === 'COMPLETED' ? 'success' : undefined" /></div>
+          <span class="upload-state">{{ item.status === 'READY' ? '等待上传' : item.status === 'UPLOADING' ? '上传中' : item.status === 'COMPLETED' ? (item.duplicate ? '已存在，已复用' : '等待解析') : '上传失败' }}</span>
+          <el-button v-if="item.status !== 'UPLOADING'" link :disabled="uploading" @click="removeUploadItem(item)">移除</el-button>
+          <p v-if="item.error" class="error" role="alert">{{ item.error }}</p>
+        </article>
+      </div>
+      <div class="batch-actions">
+        <el-button type="primary" :loading="uploading" :disabled="!uploadItems.some(item => ['READY','FAILED'].includes(item.status))" @click="startUpload(false)">上传全部待处理文件</el-button>
+        <el-button v-if="failedUploadCount" :disabled="uploading" @click="startUpload(true)">仅重试失败项（{{ failedUploadCount }}）</el-button>
+        <el-button v-if="completedUploadCount" :disabled="uploading" @click="clearFinishedUploads">清除已完成项</el-button>
+      </div>
     </div>
   </section>
 
@@ -247,5 +299,5 @@ onBeforeUnmount(() => progressEvents?.close())
 </template>
 
 <style scoped>
-.upload-panel,.materials,.finalize { background: var(--fw-surface); border: 1px solid var(--fw-border); border-radius: 12px; margin-top: 24px; padding: 24px; }h2{font-size:20px;line-height:28px;margin:0 0 4px}.upload-panel>div>p,.connection,.finalize p{color:var(--fw-text-secondary);margin:0}.finalize{align-items:center;display:flex;gap:12px}.finalize>div{flex:1}.current-version{margin-top:6px!important}.form-grid{display:grid;gap:16px;grid-template-columns:220px 1fr;margin:20px 0}.form-grid label{display:grid;font-weight:600;gap:6px}.drop-zone{align-items:center;background:var(--fw-background);border:1px dashed #9ca3af;border-radius:8px;color:var(--fw-text);cursor:pointer;display:flex;flex-direction:column;gap:4px;padding:28px;width:100%}.drop-zone.dragging{border-color:var(--fw-primary);background:#eff6ff}.drop-zone span{color:var(--fw-text-secondary);font-weight:400}.visually-hidden{height:1px;overflow:hidden;position:absolute;width:1px;clip:rect(0 0 0 0)}.upload-actions{margin-top:16px}.progress{margin-bottom:12px}.error{color:var(--fw-danger)}.empty{color:var(--fw-text-secondary)}.mobile-list{display:none}.status{display:block;font-weight:600}.status+small{color:var(--fw-text-secondary);display:block;line-height:18px}@media(max-width:767px){.upload-panel,.materials,.finalize{padding:20px}.finalize{align-items:stretch;flex-direction:column}.form-grid{grid-template-columns:1fr}.desktop-table{display:none}.mobile-list{display:grid;gap:12px}.mobile-list article{border:1px solid var(--fw-border);border-radius:8px;display:grid;gap:6px;padding:16px}.mobile-list span{color:var(--fw-text-secondary)}}
+.upload-panel,.materials,.finalize { background: var(--fw-surface); border: 1px solid var(--fw-border); border-radius: 12px; margin-top: 24px; padding: 24px; }h2{font-size:20px;line-height:28px;margin:0 0 4px}.upload-panel>div>p,.connection,.finalize p{color:var(--fw-text-secondary);margin:0}.finalize{align-items:center;display:flex;gap:12px}.finalize>div{flex:1}.current-version{margin-top:6px!important}.form-grid{display:grid;gap:16px;grid-template-columns:220px 1fr;margin:20px 0}.form-grid label{display:grid;font-weight:600;gap:6px}.drop-zone{align-items:center;background:var(--fw-background);border:1px dashed #9ca3af;border-radius:8px;color:var(--fw-text);cursor:pointer;display:flex;flex-direction:column;gap:4px;padding:28px;width:100%}.drop-zone.dragging{border-color:var(--fw-primary);background:#eff6ff}.drop-zone span{color:var(--fw-text-secondary);font-weight:400}.visually-hidden{height:1px;overflow:hidden;position:absolute;width:1px;clip:rect(0 0 0 0)}.upload-actions{margin-top:16px}.batch-progress{margin-bottom:12px}.upload-queue{display:grid;gap:8px;margin:12px 0}.upload-item{align-items:center;border:1px solid var(--fw-border);border-radius:8px;display:grid;gap:10px;grid-template-columns:minmax(220px,1.3fr) minmax(160px,1fr) 90px auto;padding:10px 12px}.upload-file{display:grid;min-width:0}.upload-file strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.upload-file span,.upload-state{color:var(--fw-text-secondary);font-size:13px}.upload-item .error{grid-column:1/-1;margin:0}.batch-actions{display:flex;flex-wrap:wrap;gap:8px}.error{color:var(--fw-danger)}.empty{color:var(--fw-text-secondary)}.mobile-list{display:none}.status{display:block;font-weight:600}.status+small{color:var(--fw-text-secondary);display:block;line-height:18px}@media(max-width:767px){.upload-panel,.materials,.finalize{padding:20px}.upload-item{grid-template-columns:1fr}.upload-item .error{grid-column:auto}.batch-actions{align-items:stretch;flex-direction:column}.finalize{align-items:stretch;flex-direction:column}.form-grid{grid-template-columns:1fr}.desktop-table{display:none}.mobile-list{display:grid;gap:12px}.mobile-list article{border:1px solid var(--fw-border);border-radius:8px;display:grid;gap:6px;padding:16px}.mobile-list span{color:var(--fw-text-secondary)}}
 </style>

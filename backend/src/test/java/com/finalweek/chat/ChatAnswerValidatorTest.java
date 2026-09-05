@@ -31,4 +31,11 @@ class ChatAnswerValidatorTest {
                 .isInstanceOfSatisfying(BusinessException.class,
                         exception -> assertThat(exception.code()).isEqualTo("CHAT_ANSWER_INVALID"));
     }
-}
+
+    @Test
+    void removesInternalUuidMarkersFromVisibleAnswer() {
+        var segment = UUID.randomUUID();
+        var json = "{\"answer\":\"**重点** [" + segment + "]\",\"sourceSegmentIds\":[\"" + segment
+                + "\"],\"generalKnowledgeSupplement\":null}";
+        assertThat(validator.parse(json, Set.of(segment)).answer()).isEqualTo("**重点**");
+    }}

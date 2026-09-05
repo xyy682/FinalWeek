@@ -6,6 +6,8 @@ import static org.mockito.Mockito.*;
 
 import com.finalweek.auth.UserAccount;
 import com.finalweek.auth.UserAccountRepository;
+import com.finalweek.chat.ChatMessage;
+import com.finalweek.chat.ChatMessageRepository;
 import com.finalweek.common.api.BusinessException;
 import com.finalweek.common.persistence.MybatisPlusConfiguration;
 import com.finalweek.course.Course;
@@ -60,6 +62,7 @@ class KnowledgeVersionMybatisIntegrationTest {
     @Autowired MockExamObjectCleanupRepository examCleanups;
     @Autowired JdbcTemplate jdbc;
     @Autowired BackgroundTaskRepository tasks;
+    @Autowired ChatMessageRepository chatMessages;
     @Autowired PlatformTransactionManager transactionManager;
 
     @Test
@@ -141,6 +144,40 @@ class KnowledgeVersionMybatisIntegrationTest {
         assertThat(requeued.getAnswerObjectKey()).isEqualTo("partial-answer");
     }
 
+    @Test
+    void comparisonOperatorsInAnnotatedSqlExecuteAgainstMySql() {
+        var user = users.saveAndFlush(new UserAccount("sql-comparison-mybatis@example.com"));
+        var course = courses.saveAndFlush(new Course(user, "数据库"));
+        var material = materials.saveAndFlush(new Material(UUID.randomUUID(), course, "sql.md",
+                "materials/sql.md", "7".repeat(64), 16, "text/markdown", MaterialType.NOTES, null));
+        var task = tasks.saveAndFlush(new BackgroundTask(user.getId(), course.getId(), material));
+
+        assertThat(tasks.claim(task.getId(), task.getExecutionRound(), 3, "integration-owner",
+                java.time.Instant.now().plusSeconds(300))).isEqualTo(1);
+        assertThat(tasks.markSucceeded(task.getId(), task.getExecutionRound(), "stale-owner")).isZero();
+        assertThat(tasks.markSucceeded(task.getId(), task.getExecutionRound(), "integration-owner")).isOne();
+        jdbc.update("update background_task set status='FAILED', updated_at=date_sub(current_timestamp, interval 1 hour) " +
+                "where id=UUID_TO_BIN(?)", task.getId().toString());
+        assertThat(tasks.findTop100ByStatusAndUpdatedAtBeforeOrderByUpdatedAtAsc(
+                TaskStatus.FAILED, java.time.Instant.now())).extracting(BackgroundTask::getId).contains(task.getId());
+
+        var version = versions.saveAndFlush(new CourseKnowledgeVersion(course, 1, "6".repeat(64)));
+        var request = new MockExamRequestNormalizer.Normalized(MockExamScope.WHOLE_COURSE, List.of(),
+                Map.of(MockExamQuestionType.SINGLE_CHOICE, 1), ScoreMode.AUTO, Map.of(),
+                null, null, true, "", 1, 2);
+        var exam = exams.saveAndFlush(new MockExam(user.getId(), course.getId(), version, null,
+                "sql-comparison", "SQL", "SQL", "{}", "5".repeat(64), request,
+                "v1", .82, "v1", "v1"));
+        var cleanup = examCleanups.saveAndFlush(new MockExamObjectCleanup(exam, "paper", "answer"));
+        assertThat(examCleanups.findDueForUpdate(java.time.Instant.now().plusSeconds(5), 10))
+                .extracting(MockExamObjectCleanup::getId).contains(cleanup.getId());
+
+        var message = ChatMessage.question(user.getId(), course.getId(), "什么是事务？");
+        message.succeed();
+        message = chatMessages.saveAndFlush(message);
+        assertThat(chatMessages.recentSucceeded(user.getId(), course.getId(),
+                java.time.Instant.now().plusSeconds(5), 10)).extracting(ChatMessage::getId).contains(message.getId());
+    }
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void concurrentConfirmationCreatesOneVersionAndDispatchesOneOutlineTask() throws Exception {

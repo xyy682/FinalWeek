@@ -7,9 +7,12 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import com.finalweek.upload.StorageOperationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(BusinessException.class)
     ResponseEntity<ApiError> business(BusinessException exception, HttpServletRequest request) {
@@ -34,8 +37,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     ResponseEntity<ApiError> unexpected(Exception exception, HttpServletRequest request) {
+        var requestId = requestId(request);
+        log.error("Unexpected request failure method={} uri={} requestId={}",
+                request.getMethod(), request.getRequestURI(), requestId, exception);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiError.of("INTERNAL_ERROR", "服务暂时无法处理请求", requestId(request)));
+                .body(ApiError.of("INTERNAL_ERROR", "服务暂时无法处理请求", requestId));
     }
 
     private String requestId(HttpServletRequest request) {

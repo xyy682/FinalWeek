@@ -1,0 +1,6 @@
+"iteration","email","course_id","http_status","elapsed_ms","request_id","response_task_id","current_version_status","failed_task_status","error"
+"1","outline-repro-20260822-144416-1@example.com","588a3e8b-bff6-4da6-9f2f-e671737d85c4","202","75.833","outline-repro-20260822-144416-1","b9d8d57f-39c9-484e-bba0-3eab06206e8c","PUBLISHED",,
+"2","outline-repro-20260822-144416-2@example.com","ab1f6951-71ff-497e-850b-eafd31bce6c7","202","91.5","outline-repro-20260822-144416-2","807ef934-40fd-4db8-ad09-75479c3fddef","PUBLISHED",,
+"3","outline-repro-20260822-144416-3@example.com","b62df1f3-4898-46be-93a0-514714becce3","202","75.537","outline-repro-20260822-144416-3","2d7d3f0c-d27c-4c65-93a1-bb2d538a7b49","PUBLISHED",,
+"4","outline-repro-20260822-144416-4@example.com","cf60a8ea-4574-43cc-893e-d424fadf1789","202","51.085","outline-repro-20260822-144416-4","e106f546-23ce-487b-8023-2ef4aca08e13","PUBLISHED",,
+"5","outline-repro-20260822-144416-5@example.com","6616221b-4653-4d20-b81a-284c61f32def","202","66.886","outline-repro-20260822-144416-5","4c116017-718d-46fb-a2d2-e9d652d53d37","PUBLISHED",,

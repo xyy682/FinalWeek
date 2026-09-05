@@ -1,0 +1,5 @@
+FROM finalweek-backend
+USER root
+COPY backend/target/finalweek-backend-0.1.0-SNAPSHOT.jar /app/app.jar
+RUN chown finalweek:finalweek /app/app.jar
+USER finalweek

@@ -1,6 +1,8 @@
 # Implementation Plan — FinalWeek（求职版 MVP）
 
-> 文档状态：Phase 1–16 已完成。Phase 12–16 已通过代码、迁移、单元/容器测试、真实 XeLaTeX、浏览器主链路与 14 条真实百炼 Golden Case 验证；实际结果见 `docs/TEST_REPORT.md`。
+> 文档状态：Phase 1–16 已完成。Phase 12–16 已通过代码、迁移、单元/容器测试、真实 XeLaTeX 和浏览器主链路验证；14 条真实百炼 Golden Case 覆盖当时的原七类题型，后续新增综合题已有自动化覆盖但尚未重新运行付费 Golden Eval。实际结果见 `docs/TEST_REPORT.md`。
+>
+> 本文是实施历史，不是当前运行时说明。Phase 8、9 中的同步计划/问答等内容记录当时的阶段结果，已经被 Phase 13 替代；学习当前架构请优先阅读 [`GPT_CONTEXT.md`](GPT_CONTEXT.md)。
 
 ## Implementation Rule
 
@@ -38,7 +40,7 @@
 1. 实现邮箱验证码发送、Redis TTL、请求限流和 Mailpit 测试。
 2. 实现 Spring Session、HttpOnly Cookie、CSRF 和退出登录。
 3. 实现课程创建、列表、详情、重命名、逻辑删除和 8 门上限。
-4. 建立课程四区域路由和桌面/手机基础布局。
+4. 建立当时的课程四区域路由和桌面/手机基础布局；Phase 15 已新增模拟卷并形成当前五区域导航。
 5. 为课程资源实现统一 ownership 校验。
 6. 实现 Redis 故障门禁：登录和全部需要认证的接口统一返回 HTTP 503，静态落地页与无需认证健康检查仍可访问。
 
@@ -86,7 +88,7 @@
 1. 建立 parse_task、task_checkpoint、failed_task 表和状态机，分别保存 `publish_attempt_count`、`delivery_attempt_count`、`api_attempt_count`，并增加 `manual_retry_count`、`execution_round`。
 2. 配置 RabbitMQ durable exchange/queue、confirm、manual ack、重投和失败队列。
 3. 上传完成后先写 `PENDING_PUBLISH` 任务，再用 publisher confirm 条件推进为 `QUEUED`；失败条件推进为 `PUBLISH_FAILED`，实现显式重新投递和滞留任务扫描补偿。confirm 回调不得倒退已进入处理或终态的任务。
-4. 消费者通过 MySQL CAS、Redisson 锁、business_key 和终态检查处理重复消息；允许 `PENDING_PUBLISH`、`PUBLISH_FAILED`、`QUEUED`、`RETRYING` 抢占为 `PROCESSING`，覆盖消息早于 confirm 回写或 confirm 超时后延迟到达的竞态；结果幂等写入后最后提交 checkpoint。
+4. 消费者通过 MySQL CAS 执行租约、owner 栅栏、`business_key` 和终态检查处理重复消息；认领时写入 owner/lease，运行期间心跳续租，超时由扫描器回收重投；结果幂等写入后最后提交 checkpoint。Redisson 任务锁因与 CAS 职责重叠而移除。
 5. 外部 API 调用最多执行 3 次（首次 + 2 次重试），任务每个 `execution_round` 最多执行 3 次（首次消费 + 2 次重投）；`PUBLISH_FAILED` 重新投递复用当前轮次并以 CAS 回到 `PENDING_PUBLISH`，普通用户对终态 `FAILED` 手动重试则复用原任务/checkpoint、开启新轮次预算并增加手动重试计数，旧轮次消息不得消耗新预算。
 6. 实现 Redis 任务进度和 SSE；断线后 REST 恢复终态。
 7. 实现 `PENDING_PUBLISH`、`PUBLISH_FAILED`、`QUEUED` 状态的 CAS 取消，并覆盖取消与消费抢占并发。
@@ -117,7 +119,7 @@
 2. PDFBox 提取 PDF 文本和页码；扫描页渲染并调用 OCR。
 3. POI 提取 PPTX 文本和幻灯片号；需要时使用 LibreOffice 渲染后 OCR。
 4. TXT/MD 按段落提取。
-5. FFmpeg 提取并切分音频，通过 `paraformer-realtime-v2` Java 本地文件/音频流接口调用 ASR 获取时间戳；验证整个流程不依赖公网 MinIO URL。
+5. FFmpeg 为整份媒体生成一个 16 kHz 单声道 WAV，通过 `paraformer-realtime-v2` Java SDK 本地文件非流式调用 ASR 并读取句级时间戳；应用层不拆分 ASR 会话，且整个流程不依赖公网 MinIO URL。
 6. MP4 执行场景变化检测、固定间隔保底抽帧、感知哈希去重和 OCR。
 7. 按时间轴合并 ASR 与 OCR；单路失败时保留另一条并记录警告。
 8. 完成 `CONTENT_EXTRACTED` 阶段 checkpoint。
@@ -182,7 +184,7 @@
 - 并发点击生成只创建一个活动任务，旧生成版本不能覆盖较新版本。
 - 首版没有结构编辑或智能合并入口。
 
-## Phase 8 — Simple Daily Study Plan
+## Phase 8 — Simple Daily Study Plan（历史同步实现，已被 Phase 13 替代）
 
 > 本阶段记录首版同步实现；Phase 13 已将生成编排迁移为后台任务，并保留本阶段的幂等、预算和计划版本 CAS 约束。
 
@@ -208,7 +210,7 @@
 - 超时后重新获取当前计划，重复提交不会产生多份“当前计划”。
 - 并发不同请求使用计划版本 CAS，较旧请求不会覆盖较新的当前计划；触发计划限流时不调用模型。
 
-## Phase 9 — Course Text Q&A and Rate Limiting
+## Phase 9 — Course Text Q&A and Rate Limiting（历史同步实现，已被 Phase 13 替代）
 
 > 本阶段记录首版同步实现；Phase 13 已将模型处理迁移为隐藏后台任务，并保留本阶段的消息幂等、来源白名单和重试约束。
 
@@ -335,7 +337,7 @@
 
 1. 建立 `mock_exam`、`mock_exam_question`、`mock_exam_question_source`、重试关联和逻辑删除模型。
 2. 实现创建、详情、分页历史、修改后重试、排队取消和终态逻辑删除接口；同课程活动出卷任务上限为 1。
-3. 定义七类题型 JSON Schema/DTO；校验逐题型题数、1–50 总题数、整数分值/1000 上限、可选 1–300 分钟时长和 2000 字补充说明。
+3. 定义八类题型 JSON Schema/DTO；校验逐题型题数、1–50 总题数、整数分值/1000 上限、可选 1–300 分钟时长和 2000 字补充说明。
 4. 固定任务的知识版本和提纲范围；整课使用版本全部资料，父节点范围展开完整子树。
 5. 构造出题上下文：用户要求优先，真题类型+内容识别其次，自动识别教师例题再次；只仿风格，不复刻原题。
 6. 默认课程资料优先，仅在用户允许且确有缺口时使用模型内置通用知识；禁止联网，严格模式资料不足则失败并说明缺口。
@@ -344,7 +346,7 @@
 
 ### Done When
 
-- 七类题型均能产生可验证结构化题目和精简参考答案，课程内题逐题具有合法内部来源。
+- 八类题型均能产生可验证结构化题目和精简参考答案，课程内题逐题具有合法内部来源。
 - 用户禁止通用知识时不会静默补题或减少题量；允许时只补缺口并正确标识。
 - 生成期间课程发布新版不改变任务输入，成功结果保留原知识版本。
 - 失败、取消和修改后重试均保留不可变历史，ownership 和课程隔离覆盖全部接口。
@@ -361,7 +363,7 @@
 2. 建立受版本控制的 A4 试卷/参考答案模板、统一 TeX 文本转义和数学命令白名单。
 3. 以非特权用户、独立临时目录、`-no-shell-escape`、超时和大小限制编译；使用 PDFBox 做打开、页数和基础结果校验。
 4. 两个 PDF 使用确定性 MinIO 对象键。只有两者上传并复核成功才原子发布；部分对象进入清理而不对用户可见。
-5. 新增 `/courses/:id/mock-exams` 标签和同页表单/分页历史；实现范围树、七类题型数量、分值模式、可选总分/时长、通用知识开关和补充说明。
+5. 新增 `/courses/:id/mock-exams` 标签和同页表单/分页历史；实现范围树、八类题型数量、分值模式、可选总分/时长、通用知识开关和补充说明。
 6. 历史默认显示名称、状态、时间和操作；错误/警告按需展开。预览新标签页打开短时 URL，下载使用安全文件名。
 7. 逻辑删除后立即隐藏记录，后台幂等清理对象；管理员 dry-run 增加孤儿模拟卷 PDF 核对。
 
@@ -384,7 +386,7 @@
 1. 补齐知识版本、通用任务、计划/答疑异步化、模拟卷领域、TeX 安全和清理的单元与 Testcontainers 测试。
 2. 扩展 Playwright：上传多份资料 → 确认 → 自动提纲 → 跨页面任务 → 异步计划 → 离页答疑 → 模拟卷 → 双 PDF 操作。
 3. 覆盖并发确认、任务取消/消费竞争、提纲与计划版本竞争、SSE 断线、同课程出卷冲突、双文件部分失败、逻辑删除清理和越权访问。
-4. 扩展 Golden Case：真题风格、教师例题、严格资料不足、通用知识补题、七类题型、公式、答案一致性和原题复刻检查。
+4. 扩展 Golden Case 与自动化质量检查：真题风格、教师例题、严格资料不足、通用知识补题、题型、公式、答案一致性和原题复刻。真实付费报告覆盖当时的原七类题型；后续综合题只完成自动化回归，尚待重新运行付费 Golden Eval。
 5. 在真实 Docker Compose 中验证 XeLaTeX 镜像、中文字体、MinIO 预览下载、RabbitMQ 新任务和完整跨课程导航。
 6. 只有所有结果真实运行后，才更新 README、测试报告、截图、测试数量和当前可运行能力；如实记录失败指标与边界。
 

@@ -37,6 +37,13 @@ public class TaskDispatchService {
             log.warn("Task publish failed after acquired rate limit taskId={}", task.getId(), exception);
         }
     }
+    public void dispatchRecovered(BackgroundTask task) {
+        try { send(task); }
+        catch (RuntimeException exception) {
+            states.publishFailed(task.getId(), task.getExecutionRound(), "MQ_PUBLISH_FAILED", exception.getMessage());
+            log.warn("Recovered task publish failed taskId={}", task.getId(), exception);
+        }
+    }
 
     public BackgroundTask republish(UUID userId, UUID taskId) {
         var existing = states.owned(userId, taskId);

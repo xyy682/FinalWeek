@@ -1,2 +1,2 @@
-/** Synchronous daily study plan generation. */
+/** Asynchronous, version-aware daily study plan generation. */
 package com.finalweek.plan;

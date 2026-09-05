@@ -1,6 +1,8 @@
 # Tech Stack — FinalWeek（求职版 MVP）
 
 > 文档状态：Phase 1–16 已完成。文末“Phase 12–16 技术栈增量”对应已交付的知识版本、通用任务、模拟卷、XeLaTeX 和评测实现。
+>
+> 当前技术事实与历史方案排除清单见 [`GPT_CONTEXT.md`](GPT_CONTEXT.md)。下文 Phase 12–16 增量均为当前已实现能力，不再表示未来目标。
 
 ## Technical Goal
 
@@ -42,7 +44,7 @@
 - MyBatis-Plus：业务数据访问、分页、条件查询与显式 CAS SQL；实体关系使用标量外键，复杂查询由 Mapper SQL 明确表达。
 - Flyway：数据库迁移；禁止 `ddl-auto=update`。
 - Spring AMQP：RabbitMQ 生产、消费、确认和失败队列。
-- Redisson：上传合并锁、任务执行锁、课程级 Lucene 写锁和令牌桶限流。
+- Redisson：上传合并锁、内容哈希锁、课程级 Lucene 写锁和令牌桶限流；RabbitMQ 任务执行权由 MySQL CAS 租约控制。
 - Spring Validation：接口参数校验。
 - Spring Boot Actuator + Micrometer：健康检查与基础指标。
 - springdoc-openapi：REST API 文档。
@@ -108,11 +110,11 @@
 
 ### RabbitMQ
 
-- 保存长耗时解析和提纲任务。
+- 保存资料解析、提纲、复习计划、模拟卷和隐藏答疑等长耗时后台任务。
 - durable exchange/queue、persistent message、publisher confirm、manual ack。
 - 数据库先创建 `PENDING_PUBLISH` 任务，publisher confirm 成功后进入 `QUEUED`；投递失败进入 `PUBLISH_FAILED`，允许显式重新投递。
 - 初次投递或重新投递均先获取 RabbitMQ 用户级/全局限流令牌。上传 complete 已落库但限流未通过时，任务条件进入 `PUBLISH_FAILED` 并记录 `AI_RATE_LIMITED`，上传结果不回滚且不发送消息；提纲生成限流未通过时返回 429 且不创建任务。
-- 消费者可能先于 confirm 状态回写收到消息，或在 confirm 超时后收到延迟消息，因此可用 CAS 将 `PENDING_PUBLISH`、`PUBLISH_FAILED`、`QUEUED` 或 `RETRYING` 推进到 `PROCESSING`；confirm 回调只能条件更新，不能倒退已进入处理或终态的任务。
+- 消费者可能先于 confirm 回写收到消息，因此使用 MySQL CAS 推进到 `PROCESSING` 并原子写入 owner/lease；心跳续租，超时由扫描器 CAS 回收重投，成功/失败/重试更新校验 owner。confirm 只能条件更新，不能倒退后续状态。
 - 单个任务最多执行 3 次（首次消费 + 2 次重投）；单次外部 API 调用最多执行 3 次（首次 + 2 次重试），两类计数分开保存。
 - 普通用户对 `FAILED` 资料手动重试时复用原任务、business key 与 checkpoint，开启新的任务级投递预算并记录手动重试轮次；不创建第二个解析任务。
 - 消息只传 `taskId`、`materialId`、`courseId`、`executionRound` 等标识，不传文件或全文；旧轮次消息不得执行或消耗新轮次预算。
@@ -123,7 +125,7 @@
 - 文件访问必须经过 Spring Boot 权限校验或短期预签名 URL。
 - 音视频预览支持 HTTP Range；预签名 URL 仅在课程归属校验后签发。
 - 原始文件名只作为展示信息，不直接作为对象键。
-- 本地 MinIO 不需要暴露公网访问；ASR 由 Spring Boot 读取本地对象后通过支持本地文件/音频流的接口提交。
+- 本地 MinIO 不需要暴露公网访问；ASR 由 Spring Boot 读取本地对象、生成整份 WAV 后通过 SDK 本地文件非流式接口提交。
 
 ### Qdrant
 
@@ -167,16 +169,16 @@
 - 所有课程资源查询必须包含当前用户 ID。
 - 错误响应统一包含稳定 `code`、中文 `message` 和 `requestId`。
 - SSE：`GET /api/v1/tasks/events`，断线后通过 REST 查询当前任务状态。
-- 计划：同步 `POST /api/v1/courses/{courseId}/plan/generate`，要求客户端幂等键并使用服务端请求记录和计划版本 CAS；问答：同步 `POST /api/v1/courses/{courseId}/messages`。两者分别使用可配置请求超时和用户级限流。
+- 计划：`POST /api/v1/courses/{courseId}/plan/generate` 接收客户端幂等键，创建用户可见后台任务并返回 `202 Accepted`；服务端保留请求记录、知识版本快照和计划版本 CAS。问答：`POST /api/v1/courses/{courseId}/messages` 在同一事务中保存 `PENDING` 消息与隐藏后台任务并返回 `202 Accepted`。两者都通过 RabbitMQ 离页执行，并分别使用可配置模型超时和用户级限流。
 - 课程删除遇到 `PROCESSING`/`RETRYING` 任务返回 `409 COURSE_TASK_RUNNING`；提纲生成重复请求返回当前活动任务。
 
 ## Testing
 
 - Java 单元测试：JUnit 5、AssertJ、Mockito。
-- 集成测试：Testcontainers 启动 MySQL、Redis、RabbitMQ、MinIO、Qdrant。
+- 集成测试：Testcontainers 当前重点启动 MySQL，验证迁移、CAS、计数和唯一约束；Redis、RabbitMQ、MinIO、Qdrant 主要由单元/集成测试及真实 Docker Compose 主链路共同覆盖。
 - API：MockMvc 或 REST Assured。
 - 前端：Vitest + Vue Test Utils。
-- 关键 E2E：Playwright，覆盖登录、上传、解析完成、提纲和问答。
+- 关键 E2E：Playwright，覆盖登录、多资料上传、解析、知识版本确认、自动提纲、异步计划、离页答疑、模拟卷和双 PDF 操作。
 - AI Golden Case：固定目录为 `evals/cases`、`evals/annotations`、`evals/fixtures`、`evals/reports`，schema 为 `evals/report.schema.json`；由 `./mvnw -Pgolden-eval verify`（Windows：`mvnw.cmd -Pgolden-eval verify`）运行真实百炼配置，输出含运行时间、实际模型 ID、配置快照、逐案例评分和汇总指标的 JSON 报告，可附 Markdown 摘要。
 - 故障测试：重复 complete、MQ 重复消费、第三方 429/5xx、Redis 暂时不可用、SSE 重连。
 
@@ -214,7 +216,7 @@
 文档中的数量、大小、时长、TTL、限流、TopK、RRF、后台模型调用超时、历史条数、案例数和阈值均是首版默认可配置值，不是不可修改的业务需求；实施时统一写入类型化配置并在 `.env.example` 说明，不得散落为魔法数字。至少包括：
 
 - 上传会话 TTL：`UPLOAD_TTL_HOURS=24`。
-- RabbitMQ 任务限流（覆盖资料解析与提纲生成）：`PARSE_USER_RATE_PER_MINUTE=5`、`PARSE_GLOBAL_RATE_PER_MINUTE=30`。变量名为兼容首版配置沿用 `PARSE_*`，语义是所有用户触发的 RabbitMQ AI 任务。
+- RabbitMQ 任务限流（覆盖资料解析与提纲生成）：`PARSE_USER_RATE_PER_MINUTE=30`、`PARSE_GLOBAL_RATE_PER_MINUTE=120`。变量名为兼容首版配置沿用 `PARSE_*`，语义是所有用户触发的 RabbitMQ AI 任务。
 - 用户计划生成限流：`PLAN_USER_RATE_PER_MINUTE=5`。
 - 用户问答限流：`CHAT_USER_RATE_PER_MINUTE=20`。
 - 混合检索：`RRF_K=60`，向量、BM25 和最终 TopK 分别由 `VECTOR_TOP_K`、`BM25_TOP_K`、`FINAL_TOP_K` 配置。
@@ -225,7 +227,7 @@
 
 ### Frontend and Task Delivery
 
-- Vue Router 目标态增加 `/courses/:id/mock-exams`；课程导航从当前四区扩展为五区。
+- Vue Router 已包含 `/courses/:id/mock-exams`；课程导航当前为资料、知识提纲、复习计划、课程问答、模拟卷五区。
 - 继续使用 Pinia 保存少量全局界面状态，增加只包含活动任务的任务抽屉状态；任务终态和业务结果仍以 REST/MySQL 为准。
 - 复用 `GET /api/v1/tasks/events` 推送资料、提纲、计划、模拟卷进度及答疑消息终态。断线恢复必须先调用活动任务/业务历史 REST，不引入 WebSocket。
 - 计划和答疑不再依赖浏览器同步等待模型：计划进入用户可见后台任务；答疑进入隐藏后台任务并通过消息历史恢复。
@@ -246,7 +248,7 @@
 ### XeLaTeX PDF Generation
 
 - 标准试卷和参考答案使用受控 XeLaTeX 模板生成，不使用 PDFBox 进行复杂版面创作。PDFBox 继续负责读取/渲染已有资料，并可用于生成结果的打开、页数和基本结构校验。
-- 后端 Jammy 运行镜像目标态安装固定版本/发行版的 XeLaTeX、必要的基础宏包及 Noto CJK 字体；不得使用 `latest` 或运行时联网下载宏包。
+- 后端 Jammy 运行镜像已安装固定发行版的 XeLaTeX、必要的基础宏包及 Noto CJK 字体；不得使用 `latest` 或运行时联网下载宏包。
 - XeLaTeX 以非特权 `finalweek` 用户运行，每个任务使用独立临时目录、`-no-shell-escape`、编译超时、文件大小限制和退出码检查。
 - 仓库内只维护两套受版本控制模板：试卷与参考答案。模板负责 A4、分页、题型标题、姓名/学号栏、分值、答题空间及页眉页脚。
 - 业务文本进入模板前统一 TeX 转义。数学内容使用单独字段和受支持命令白名单，不允许模型或用户注入宏定义、包加载、文件读写、网络或 include。
@@ -260,12 +262,12 @@
 
 ### AI Structured Output and Validation
 
-- `LlmClient` 继续使用固定 JSON Schema；模拟卷 schema 覆盖七类题型、选项、答案、分值、课程来源 ID、通用知识标识和公式字段。
+- `LlmClient` 继续使用固定 JSON Schema；模拟卷 schema 覆盖八类题型、选项、答案、分值、课程来源 ID、通用知识标识和公式字段。
 - 普通文本、公式、来源 ID 分字段返回，禁止把整份 TeX 或 PDF 交给模型生成。
 - Java Validator 强制执行题型题量、总题数 1–50、整数分值/汇总不超过 1000、可选时长 1–300、补充说明 2000 字、答案完整性和来源 ownership。
 - 不新增联网搜索、Agent、多模型路由或图片生成。通用知识仅使用当前 LLM 内置知识，并在课程资料不足且用户允许时补足。
 
-### Target Configuration
+### Current Configuration
 
 新增配置必须进入类型化配置和 `.env.example`，至少包括：
 
@@ -275,15 +277,15 @@
 - 模拟卷分页大小、预签名 URL TTL、逻辑删除对象清理重试与扫描间隔。
 - 历史题相似度策略和警告阈值应可版本化并写入生成记录/评测快照，不得散落在提示词中。
 
-### Target Testing Stack
+### Current Testing Stack
 
 - 后端单元测试增加知识版本、模拟卷 schema/validator、TeX 转义、公式白名单、模板渲染和双文件原子发布。
 - Testcontainers/Compose 集成测试覆盖迁移后的通用任务表、RabbitMQ 新任务类型、MinIO 双 PDF、逻辑删除清理和用户隔离。
 - Playwright 目标主流程扩展为资料确认、自动提纲、跨页面任务抽屉、异步计划、离页答疑、模拟卷生成历史及 PDF 操作。
-- Golden Case 增加真题风格、教师例题、严格资料不足、通用知识补题、七类题型和公式案例；评测报告区分结构校验、来源忠实度、答案一致性、原题复刻与 PDF 可用性。
-- 上述本地、容器、浏览器和 14 条真实百炼 Golden Case 验证均已实际运行；结果与报告路径见 `docs/TEST_REPORT.md`。
+- Golden Case 增加真题风格、教师例题、严格资料不足、通用知识补题、题型和公式案例；评测报告区分结构校验、来源忠实度、答案一致性、原题复刻与 PDF 可用性。
+- 本地、容器和浏览器验证均已实际运行；14 条真实百炼 Golden Case 覆盖当时的原七类题型。后续综合题已加入代码和自动化测试，但尚未重新运行付费 Golden Eval。结果与报告路径见 `docs/TEST_REPORT.md`。
 
-### Target Constraints
+### Current Constraints
 
 - 不新增 Python Worker、独立渲染服务或第二套消息系统。
 - 不允许模型直接输出可执行 TeX 模板；不启用 shell escape；不运行用户提供的 TeX。

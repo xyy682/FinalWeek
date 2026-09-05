@@ -17,6 +17,11 @@
 \rhead{第 \thepage 页 / 共 \pageref{LastPage} 页}
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{0.45em}
+\setlist{nosep}
+\newcommand{\questionline}[2]{%
+  \begin{minipage}[t]{\dimexpr\linewidth-4.8em\relax}\raggedright #1\end{minipage}%
+  \hfill\begin{minipage}[t]{4.2em}\raggedleft\small\textbf{[#2 分]}\end{minipage}\par
+}
 \begin{document}
 \begin{center}
   {\LARGE\bfseries @@TITLE@@}\par

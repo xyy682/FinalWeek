@@ -126,14 +126,20 @@ onBeforeUnmount(() => { events?.close(); if (pollTimer != null) window.clearInte
       <el-tree :data="outline.nodes" node-key="id" :props="{ label: 'title', children: 'children' }" :default-expanded-keys="defaultExpanded">
         <template #default="{ data }">
           <div class="tree-node">
-            <span class="node-title">{{ (data as OutlineNode).title }}</span>
-            <el-select :model-value="(data as OutlineNode).importance" class="importance" aria-label="重要度" @change="updateImportance(data as OutlineNode, $event as OutlineImportance)">
-              <el-option v-for="(label, value) in importanceLabels" :key="value" :label="`重要度：${label}`" :value="value" />
-            </el-select>
-            <span v-if="(data as OutlineNode).importanceManuallyAdjusted" class="manual">已人工调整</span>
-            <el-button v-for="source in (data as OutlineNode).sources" :key="source.segmentId" link type="primary" @click.stop="openSource(source)">
-              来源 · {{ sourceLabel(source) }}
-            </el-button>
+            <div class="node-heading">
+              <span class="node-title">{{ (data as OutlineNode).title }}</span>
+              <span class="importance-label">重要度</span>
+              <el-select :model-value="(data as OutlineNode).importance" class="importance" :class="`importance-${(data as OutlineNode).importance.toLowerCase()}`" size="small" aria-label="调整重要度" @click.stop @change="updateImportance(data as OutlineNode, $event as OutlineImportance)">
+                <el-option v-for="(label, value) in importanceLabels" :key="value" :label="label" :value="value" />
+              </el-select>
+              <span v-if="(data as OutlineNode).importanceManuallyAdjusted" class="manual">已调整</span>
+            </div>
+            <div v-if="(data as OutlineNode).sources.length" class="node-meta">
+              <span class="evidence-label">来源</span>
+              <button v-for="source in (data as OutlineNode).sources" :key="source.segmentId" class="source-chip" type="button" @click.stop="openSource(source)">
+                {{ sourceLabel(source) }}
+              </button>
+            </div>
           </div>
         </template>
       </el-tree>
@@ -156,5 +162,5 @@ onBeforeUnmount(() => { events?.close(); if (pollTimer != null) window.clearInte
 </template>
 
 <style scoped>
-.outline-panel{background:var(--fw-surface);border:1px solid var(--fw-border);border-radius:12px;margin-top:24px;padding:24px}.outline-panel>header{align-items:flex-start;display:flex;gap:24px;justify-content:space-between}.outline-panel h2{font-size:20px;line-height:28px;margin:0 0 4px}.outline-panel header p,.version,.task-card span,.location{color:var(--fw-text-secondary);margin:0}.task-card{background:var(--fw-background);border:1px solid var(--fw-border);border-radius:8px;display:grid;gap:10px;margin:20px 0;padding:16px}.task-card>div{display:flex;justify-content:space-between}.error{color:var(--fw-danger);margin:0}.version{margin:20px 0 12px}.tree-node{align-items:center;display:flex;gap:8px;min-height:44px;width:100%}.node-title{font-weight:600;min-width:180px}.importance{width:116px}.manual{color:var(--fw-text-secondary);font-size:12px}.source-drawer{display:grid;gap:16px}.source-drawer h3{margin:0}.source-drawer blockquote{background:var(--fw-background);border-left:3px solid var(--fw-primary);margin:0;padding:16px;white-space:pre-wrap}.source-drawer iframe{border:1px solid var(--fw-border);height:58vh;width:100%}.source-drawer audio,.source-drawer video{max-height:58vh;width:100%}@media(max-width:767px){.outline-panel{padding:20px}.outline-panel>header{align-items:stretch;flex-direction:column}.tree-node{align-items:flex-start;flex-wrap:wrap;height:auto;padding:6px 0}.node-title{flex-basis:100%;min-width:0}.task-card>div{flex-direction:column;gap:4px}}
+.outline-panel{background:var(--fw-surface);border:1px solid var(--fw-border);border-radius:12px;margin-top:24px;padding:24px}.outline-panel>header{align-items:flex-start;display:flex;gap:24px;justify-content:space-between}.outline-panel h2{font-size:20px;line-height:28px;margin:0 0 4px}.outline-panel header p,.version,.task-card span,.location{color:var(--fw-text-secondary);margin:0}.task-card{background:var(--fw-background);border:1px solid var(--fw-border);border-radius:8px;display:grid;gap:10px;margin:20px 0;padding:16px}.task-card>div{display:flex;justify-content:space-between}.error{color:var(--fw-danger);margin:0}.version{margin:20px 0 12px}:deep(.el-tree-node__content){align-items:flex-start;height:auto;min-height:0}:deep(.el-tree-node__content:hover){background:transparent}:deep(.el-tree-node__expand-icon){margin-top:13px}.tree-node{border-bottom:1px solid #edf0f5;display:grid;gap:7px;min-width:0;padding:10px 8px 10px 2px;width:100%}.node-heading{align-items:center;display:flex;gap:7px;min-width:0}.node-title{color:var(--fw-text-primary);font-weight:650;line-height:22px;min-width:0}.importance-label,.evidence-label,.manual{color:var(--fw-text-secondary);font-size:12px;white-space:nowrap}.importance-label{margin-left:4px}.importance{flex:0 0 66px;width:66px}:deep(.importance .el-select__wrapper){border-radius:999px;min-height:26px;padding:2px 9px}:deep(.importance-high .el-select__wrapper){background:#fff1f0;box-shadow:0 0 0 1px #ffd8d5 inset}:deep(.importance-medium .el-select__wrapper){background:#fff7e6;box-shadow:0 0 0 1px #ffe2ad inset}:deep(.importance-low .el-select__wrapper){background:#eef4ff;box-shadow:0 0 0 1px #d8e6ff inset}.node-meta{align-items:center;display:flex;flex-wrap:wrap;gap:6px;min-width:0}.source-chip{background:transparent;border:0;border-radius:5px;color:var(--fw-primary);cursor:pointer;font:inherit;font-size:12px;line-height:20px;padding:1px 5px}.source-chip:hover{background:#edf4ff}.source-drawer{display:grid;gap:16px}.source-drawer h3{margin:0}.source-drawer blockquote{background:var(--fw-background);border-left:3px solid var(--fw-primary);margin:0;padding:16px;white-space:pre-wrap}.source-drawer iframe{border:1px solid var(--fw-border);height:58vh;width:100%}.source-drawer audio,.source-drawer video{max-height:58vh;width:100%}@media(max-width:767px){.outline-panel{padding:20px}.outline-panel>header{align-items:stretch;flex-direction:column}.tree-node{padding:9px 4px 9px 0}.node-heading{align-items:center;flex-wrap:wrap}.node-title{flex-basis:100%}.importance-label{margin-left:0}.task-card>div{flex-direction:column;gap:4px}}
 </style>
